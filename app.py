@@ -205,4 +205,25 @@ with c3:
 if st.button("回転率を計算する", type="primary"):
     # ロジック
     real_spins = total_spins - st_spins_final
-    total_payout = (count_3000 * payout_3000) + (count
+    total_payout = (count_3000 * payout_3000) + (count_1500 * payout_1500) + (count_300 * payout_300)
+    used_balls = total_payout - diff_balls
+    
+    st.markdown("### 📊 判定結果")
+    st.write(f"**実質通常回転数**: {real_spins} 回転")
+    st.write(f"**総出玉**: {total_payout:,} 発")
+    st.write(f"**推定差玉**: {diff_balls:+,} 発")
+    st.write(f"**推定投資**: {int(used_balls):,} 発 ({int(used_balls)*4:,} 円相当)")
+    
+    if used_balls > 0:
+        rate = (real_spins / used_balls) * 250
+        st.metric(label="1000円あたりの回転数", value=f"{rate:.2f} 回転")
+        
+        if rate >= 20:
+            st.balloons()
+            st.success("素晴らしい！文句なしの優秀台です！")
+        elif rate <= 15:
+            st.error("ボーダー以下の可能性が高いです。撤退を推奨します。")
+        else:
+            st.warning("ボーダー付近、または微妙なラインです。")
+    else:
+        st.error("計算エラー：投資がマイナス（勝ちすぎ）です。出玉入力やグラフを確認してください。")
