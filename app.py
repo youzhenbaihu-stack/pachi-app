@@ -6,8 +6,6 @@ import pytesseract
 import re
 
 # Tesseract OCRの設定
-# Streamlit Cloudの環境変数を考慮（packages.txtがあれば基本動作します）
-
 st.set_page_config(page_title="パチンコ回転率アナライザー", page_icon="🎰")
 
 st.title("🎰 究極の回転率アナライザー")
@@ -62,8 +60,9 @@ def analyze_graph_multi_color_tuned(img):
     else:
         zero_line_y = gy + (gh // 2)
 
-    # ★修正箇所：0ライン補正（0.5%に変更）
-    correction_y = int(gh * 0.005) 
+    # ★修正箇所：0ライン補正（0.25%に変更）
+    # グラフ高さ(gh)の0.25%だけラインを上にずらします
+    correction_y = int(gh * 0.0025) 
     zero_line_y -= correction_y
 
     # 3. グラフ線検出
@@ -198,7 +197,7 @@ with c2:
 c3, c4 = st.columns(2)
 with c3:
     count_300 = st.number_input("チャージ(300発) 回数", min_value=0, value=0)
-    # チャージの初期値は280に設定済み
+    # チャージ初期値: 280
     payout_300 = st.number_input("チャージ 出玉/回", value=280)
 
 # 計算ボタン
