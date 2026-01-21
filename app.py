@@ -102,7 +102,6 @@ st.markdown("<p style='text-align: center;'>グラフと履歴をアップロー
 def extract_graph_area(img):
     """
     画像の中からベージュ色のグラフ領域だけを特定して切り抜く関数。
-    すでに切り抜かれている場合は、そのままの画像を返す。
     """
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     height, width = img.shape[:2]
@@ -112,59 +111,43 @@ def extract_graph_area(img):
     upper_bg = np.array([40, 60, 255])
     mask_bg = cv2.inRange(hsv, lower_bg, upper_bg)
     
-    # ノイズ除去
     kernel = np.ones((5,5), np.uint8)
     mask_bg = cv2.morphologyEx(mask_bg, cv2.MORPH_CLOSE, kernel)
     
-    # 輪郭検出
     contours, _ = cv2.findContours(mask_bg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     if contours:
-        # 一番大きなベージュ領域を探す
         largest_cnt = max(contours, key=cv2.contourArea)
         x, y, w, h = cv2.boundingRect(largest_cnt)
-        
-        # 判定ロジック:
-        # もし検出されたベージュ領域が、画像の面積の80%以上を占めているなら
-        # 「すでにトリミング済みの画像」と判断して、元の画像をそのまま使う。
-        # 逆に、もっと小さければ「スクショ全体画像」と判断して、その部分だけ切り抜く。
         
         image_area = width * height
         rect_area = w * h
         
+        # 判定ロジック: 80%以上ならそのまま、それ以下なら切り抜き
         if rect_area > (image_area * 0.8):
-            # すでにほぼ全体がグラフなので、そのまま返す
             return img, (0, 0, width, height)
         else:
-            # 周りに黒い余白があるので、切り抜く
-            cropped_img = img[y:y+h, x:x+w]
-            return cropped_img, (x, y, w, h)
+            return img[y:y+h, x:x+w], (x, y, w, h)
             
-    # ベージュが見つからない場合は、とりあえずそのまま返す
     return img, (0, 0, width, height)
 
 def analyze_graph_final(img):
-    """グラフ解析（自動トリミング・0.027固定・5色対応）"""
+    """グラフ解析（自動トリミング・スケール70000発・5色対応）"""
     
-    # ★ステップ1：まずはグラフ領域だけを綺麗に抽出する
+    # ★ステップ1：自動トリミング
     cropped_img, rect = extract_graph_area(img)
     
-    # ここから先は「cropped_img（グラフ部分だけ）」に対して処理を行う
     hsv = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2HSV)
     height, width = cropped_img.shape[:2]
 
-    # --- 基準設定 ---
-    # グラフ領域の高さそのものを使って計算する
-    # ※66000という定数は、グラフ画像の縦幅が6万発分のスケールであるという前提
-    balls_per_pixel = 66000 / height 
+    # ★修正ポイント：スケールを「70000発」に設定
+    balls_per_pixel = 70000 / height 
     
-    gx, gy, gw, gh = 0, 0, width, height # 切り抜き済みなので全体を使う
+    gx, gy, gw, gh = 0, 0, width, height 
 
     # --- 0ライン検出 ---
-    # 中央付近を探す
     mid_start = int(height * 0.3)
     mid_end = int(height * 0.7)
-    
     roi_mid = cropped_img[mid_start:mid_end, :]
     gray_mid = cv2.cvtColor(roi_mid, cv2.COLOR_BGR2GRAY)
     sobel_y = cv2.Sobel(gray_mid, cv2.CV_8U, 0, 1, ksize=3)
@@ -180,25 +163,22 @@ def analyze_graph_final(img):
         lx, ly, lw, lh = cv2.boundingRect(c)
         zero_line_y = mid_start + ly + (lh // 2)
     else:
-        # 見つからない場合は画像のちょうど真ん中とする
         zero_line_y = height // 2
 
-    # 0ライン補正（0.027固定）
-    correction_y = int(height * 0.027) 
+    # 0ライン補正なし（中心基準）
+    correction_y = 0 
     zero_line_y -= correction_y
 
     # --- グラフ線検出 ---
-    # 画像全体から線を探す
-    hsv_roi = hsv # すでに切り抜き済みなので全体
+    hsv_roi = hsv 
     
-    # 色の定義
+    # 5色対応
     mask_green = cv2.inRange(hsv_roi, np.array([30, 40, 40]), np.array([90, 255, 255]))
     mask_purple = cv2.inRange(hsv_roi, np.array([120, 40, 40]), np.array([165, 255, 255]))
     mask_orange1 = cv2.inRange(hsv_roi, np.array([0, 100, 100]), np.array([25, 255, 255]))
     mask_orange2 = cv2.inRange(hsv_roi, np.array([150, 100, 100]), np.array([180, 255, 255]))
-    mask_cyan = cv2.inRange(hsv_roi, np.array([80, 40, 40]), np.array([100, 255, 255])) # 水色
+    mask_cyan = cv2.inRange(hsv_roi, np.array([80, 40, 40]), np.array([100, 255, 255]))
 
-    # 全ての色を合体
     mask_line = cv2.bitwise_or(mask_green, mask_purple)
     mask_line = cv2.bitwise_or(mask_line, mask_orange1)
     mask_line = cv2.bitwise_or(mask_line, mask_orange2)
@@ -213,42 +193,35 @@ def analyze_graph_final(img):
         for p in cnt: all_points.append(p[0])
     if not all_points: return None, "線データなし"
 
-    # 一番右の点（最新の差玉）を探す
     all_points.sort(key=lambda p: p[0])
     end_point_local = all_points[-1]
     
-    # 差分ピクセル
     end_point_y = end_point_local[1]
     diff_pixels = zero_line_y - end_point_y
     
-    # 差玉計算
+    # 差玉算出
     est_diff_balls = diff_pixels * balls_per_pixel
 
-    # 結果として返す画像は、解析に使った「切り抜き画像」を返す
     return int(est_diff_balls), cropped_img
 
 def sum_red_start_counts(img):
-    """履歴画像の赤文字をOCRで集計する"""
+    """OCR集計"""
     height, width = img.shape[:2]
     roi_width = int(width * 0.35) 
     roi = img[:, width - roi_width : width]
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-
     lower_red1 = np.array([0, 100, 100])
     upper_red1 = np.array([10, 255, 255])
     lower_red2 = np.array([160, 100, 100])
     upper_red2 = np.array([180, 255, 255])
     mask = cv2.inRange(hsv, lower_red1, upper_red1) + cv2.inRange(hsv, lower_red2, upper_red2)
-    
     kernel = np.ones((2,2), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, kernel)
     mask_inverted = cv2.bitwise_not(mask)
-    
     config = r'--oem 3 --psm 6 outputbase digits'
     text = pytesseract.image_to_string(mask_inverted, config=config)
     numbers = re.findall(r'\d+', text)
     numbers = [int(n) for n in numbers]
-    
     return sum(numbers), numbers
 
 # ---------------------------------------------------------
@@ -256,15 +229,11 @@ def sum_red_start_counts(img):
 # ---------------------------------------------------------
 col1, col2 = st.columns(2)
 
-# === 左側：画像解析エリア ===
 with col1:
     st.markdown("### 📸 画像解析エリア")
     st.markdown("---")
-    
-    # 注意事項
-    st.info("💡 **Hint**: 添付する画像はなるべく **余白の部分をカット（トリミング）** して添付してください。解析精度が向上します。")
+    st.info("💡 **Hint**: 余白が多い画像は、自動でグラフ部分だけ切り抜いて解析します。")
 
-    # 1. グラフ画像
     uploaded_graph = st.file_uploader("① グラフ画像をアップロード", type=['jpg', 'png', 'jpeg'], key="graph")
     diff_balls = 0
 
@@ -272,12 +241,11 @@ with col1:
         file_bytes = np.asarray(bytearray(uploaded_graph.read()), dtype=np.uint8)
         img_graph = cv2.imdecode(file_bytes, 1)
         
-        # 解析実行（自動トリミング機能付き）
+        # 解析実行
         result, msg_or_img = analyze_graph_final(img_graph)
         
         if result is not None:
             diff_balls = result
-            # 切り抜かれた後の画像を表示
             st.image(cv2.cvtColor(msg_or_img, cv2.COLOR_BGR2RGB), caption=f"解析範囲", use_column_width=True)
             st.success(f"推定差玉: {diff_balls} 発")
         else:
@@ -285,7 +253,6 @@ with col1:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. 履歴画像
     uploaded_histories = st.file_uploader(
         "② 履歴画像（赤数字）をアップロード (複数枚可)", 
         type=['jpg', 'png', 'jpeg'], 
@@ -300,22 +267,18 @@ with col1:
         for uploaded_file in uploaded_histories:
             file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
             img_hist = cv2.imdecode(file_bytes, 1)
-            
-            # 各画像の赤数字を集計
             st_sum, num_list = sum_red_start_counts(img_hist)
             st_spins_auto += st_sum
             all_st_details.extend(num_list)
         
-        st.info(f"検出された赤数字 (全{len(all_st_details)}件): {all_st_details}")
+        st.info(f"検出: {all_st_details}")
         st.success(f"★ 合計ST回転数: {st_spins_auto} 回転")
 
-# === 右側：計算入力エリア ===
 with col2:
     st.markdown("### 🔢 データ入力エリア")
     st.markdown("---")
 
     total_spins = st.number_input("現在の総回転数", min_value=0, value=3000, step=1)
-    # 自動集計された合計値が初期値に入る
     st_spins_final = st.number_input("ラッシュ(ST)の回転数", min_value=0, value=st_spins_auto, step=1)
 
     jitan_spins = 0
@@ -339,13 +302,11 @@ with col2:
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # 計算ボタン
     if st.button("🔥 解析開始 (ANALYZE) 🔥", type="primary"):
         real_spins = total_spins - st_spins_final - jitan_spins
         total_payout = (count_3000 * payout_3000) + (count_1500 * payout_1500) + (count_300 * payout_300)
         used_balls = total_payout - diff_balls
         
-        # 結果表示
         st.markdown(f"""
         <div style="background-color: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px; border: 2px solid #FFD700; text-align: center;">
             <h3 style="color: #FFD700; margin-bottom: 0;">RESULT</h3>
