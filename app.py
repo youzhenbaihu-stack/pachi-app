@@ -5,10 +5,19 @@ from PIL import Image
 import pytesseract
 import re
 
-# Tesseract OCRの設定
-st.set_page_config(page_title="パチンコ回転率アナライザー", page_icon="🎰")
+# ページ設定
+st.set_page_config(page_title="パチンコ回転率アナライザー", page_icon="🎰", layout="wide")
 
-st.title("🎰 究極の回転率アナライザー")
+# サイドバーでモード選択
+st.sidebar.title("メニュー")
+mode = st.sidebar.radio("機種タイプを選択してください", ["① 時短なし (スマパチ・ST機)", "② 時短あり (エヴァ・海など)"])
+
+# メインタイトル
+if mode == "① 時短なし (スマパチ・ST機)":
+    st.title("🎰 回転率アナライザー (時短なし)")
+else:
+    st.title("🎰 回転率アナライザー (時短あり)")
+
 st.markdown("グラフ画像と履歴画像をアップロードして、正確な回転率を算出します。")
 
 # ---------------------------------------------------------
@@ -60,8 +69,7 @@ def analyze_graph_final(img):
     else:
         zero_line_y = gy + (gh // 2)
 
-    # ★修正箇所1：0ライン補正を「0.027」で固定
-    # ユーザーには見えない内部計算として処理
+    # ★0ライン補正：0.027固定（内部処理のみ）
     correction_y = int(gh * 0.027) 
     zero_line_y -= correction_y
 
@@ -69,7 +77,6 @@ def analyze_graph_final(img):
     roi = img[gy:gy+gh, gx:gx+gw]
     hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     
-    # 緑・紫・オレンジ・赤
     mask_green = cv2.inRange(hsv_roi, np.array([30, 40, 40]), np.array([90, 255, 255]))
     mask_purple = cv2.inRange(hsv_roi, np.array([120, 40, 40]), np.array([165, 255, 255]))
     mask_orange1 = cv2.inRange(hsv_roi, np.array([0, 100, 100]), np.array([25, 255, 255]))
@@ -95,8 +102,7 @@ def analyze_graph_final(img):
     diff_pixels = zero_line_y - end_point_y
     est_diff_balls = diff_pixels * balls_per_pixel
 
-    # ★修正箇所2：赤線・青丸の描画を削除
-    # 計算だけして、画像は元の綺麗なまま返す
+    # 画像は加工せずそのまま返す（赤線なし）
     return int(est_diff_balls), img
 
 def sum_red_start_counts(img):
@@ -132,12 +138,9 @@ def sum_red_start_counts(img):
 st.subheader("① グラフ画像の解析")
 uploaded_graph = st.file_uploader("グラフ画像をアップロード", type=['jpg', 'png', 'jpeg'], key="graph")
 
-# ★修正箇所3：スライダー（微調整機能）を削除しました
-
 diff_balls = 0
 
 if uploaded_graph is not None:
-    # 画像読み込み
     file_bytes = np.asarray(bytearray(uploaded_graph.read()), dtype=np.uint8)
     img_graph = cv2.imdecode(file_bytes, 1)
     
@@ -146,7 +149,6 @@ if uploaded_graph is not None:
     
     if result is not None:
         diff_balls = result
-        # そのままの画像を表示（線なし）
         st.image(cv2.cvtColor(msg_or_img, cv2.COLOR_BGR2RGB), caption=f"解析完了", use_column_width=True)
         st.success(f"推定差玉: {diff_balls} 発")
     else:
@@ -180,7 +182,14 @@ col1, col2 = st.columns(2)
 with col1:
     total_spins = st.number_input("現在の総回転数", min_value=0, value=3000, step=1)
 with col2:
-    st_spins_final = st.number_input("ST/時短の回転数（自動入力値を修正可）", min_value=0, value=st_spins_auto, step=1)
+    st_spins_final = st.number_input("ラッシュ(ST)の回転数", min_value=0, value=st_spins_auto, step=1)
+
+# ★「時短あり」モードの時だけ表示する入力欄
+jitan_spins = 0
+if mode == "② 時短あり (エヴァ・海など)":
+    st.markdown("---")
+    st.info("💡 時短ありモード選択中：時短回転数を入力してください")
+    jitan_spins = st.number_input("時短中に回した回転数", min_value=0, value=0, step=1)
 
 # 出玉内訳
 st.write("▼ 当たり内訳を入力")
@@ -195,17 +204,22 @@ with c2:
 c3, c4 = st.columns(2)
 with c3:
     count_300 = st.number_input("チャージ(300発) 回数", min_value=0, value=0)
-    # チャージ初期値: 280
     payout_300 = st.number_input("チャージ 出玉/回", value=280)
 
 # 計算ボタン
 if st.button("回転率を計算する", type="primary"):
-    # ロジック
-    real_spins = total_spins - st_spins_final
+    # ロジック（時短分も引く）
+    real_spins = total_spins - st_spins_final - jitan_spins
+    
     total_payout = (count_3000 * payout_3000) + (count_1500 * payout_1500) + (count_300 * payout_300)
     used_balls = total_payout - diff_balls
     
     st.markdown("### 📊 判定結果")
+    
+    # 内訳を表示
+    if jitan_spins > 0:
+        st.write(f"総回転数 {total_spins} - ST {st_spins_final} - 時短 {jitan_spins} =")
+        
     st.write(f"**実質通常回転数**: {real_spins} 回転")
     st.write(f"**総出玉**: {total_payout:,} 発")
     st.write(f"**推定差玉**: {diff_balls:+,} 発")
