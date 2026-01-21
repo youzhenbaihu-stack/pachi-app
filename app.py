@@ -14,8 +14,8 @@ st.markdown("グラフ画像と履歴画像をアップロードして、正確�
 # ---------------------------------------------------------
 # 関数定義
 # ---------------------------------------------------------
-def analyze_graph_multi_color_tuned(img, correction_rate):
-    """グラフの画像を解析して差玉を算出する（全色対応・0ライン手動補正）"""
+def analyze_graph_final(img):
+    """グラフの画像を解析して差玉を算出する（0.027固定・線描画なし）"""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     height, width = img.shape[:2]
 
@@ -60,14 +60,16 @@ def analyze_graph_multi_color_tuned(img, correction_rate):
     else:
         zero_line_y = gy + (gh // 2)
 
-    # ★修正箇所：スライダーの値を使って補正
-    correction_y = int(gh * correction_rate) 
+    # ★修正箇所1：0ライン補正を「0.027」で固定
+    # ユーザーには見えない内部計算として処理
+    correction_y = int(gh * 0.027) 
     zero_line_y -= correction_y
 
     # 3. グラフ線検出
     roi = img[gy:gy+gh, gx:gx+gw]
     hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     
+    # 緑・紫・オレンジ・赤
     mask_green = cv2.inRange(hsv_roi, np.array([30, 40, 40]), np.array([90, 255, 255]))
     mask_purple = cv2.inRange(hsv_roi, np.array([120, 40, 40]), np.array([165, 255, 255]))
     mask_orange1 = cv2.inRange(hsv_roi, np.array([0, 100, 100]), np.array([25, 255, 255]))
@@ -93,15 +95,9 @@ def analyze_graph_multi_color_tuned(img, correction_rate):
     diff_pixels = zero_line_y - end_point_y
     est_diff_balls = diff_pixels * balls_per_pixel
 
-    # 確認画像作成
-    res_img = img.copy()
-    # 0ライン（赤線）を描画
-    cv2.line(res_img, (gx, zero_line_y), (gx+gw, zero_line_y), (0, 0, 255), 2)
-    # 現在地点（青丸）
-    end_x = gx + end_point_local[0]
-    cv2.circle(res_img, (end_x, end_point_y), 10, (255, 0, 0), -1)
-
-    return int(est_diff_balls), res_img
+    # ★修正箇所2：赤線・青丸の描画を削除
+    # 計算だけして、画像は元の綺麗なまま返す
+    return int(est_diff_balls), img
 
 def sum_red_start_counts(img):
     """履歴画像の赤文字をOCRで集計する"""
@@ -136,10 +132,7 @@ def sum_red_start_counts(img):
 st.subheader("① グラフ画像の解析")
 uploaded_graph = st.file_uploader("グラフ画像をアップロード", type=['jpg', 'png', 'jpeg'], key="graph")
 
-# ★ 新機能：スライダーで補正値を調整できる！
-# デフォルト0.025 (2.5%) くらいにしておきます
-correction_rate = st.slider("📐 0ライン位置の微調整", min_value=-0.05, max_value=0.05, value=0.025, step=0.001, format="%.3f")
-st.caption("※グラフの赤線が、実際の0ライン（黒い線）に重なるように調整してください。数値を上げると赤線が上に移動し、マイナス差玉が大きくなります。")
+# ★修正箇所3：スライダー（微調整機能）を削除しました
 
 diff_balls = 0
 
@@ -148,13 +141,13 @@ if uploaded_graph is not None:
     file_bytes = np.asarray(bytearray(uploaded_graph.read()), dtype=np.uint8)
     img_graph = cv2.imdecode(file_bytes, 1)
     
-    # 解析実行（スライダーの値 correction_rate を渡す）
-    result, msg_or_img = analyze_graph_multi_color_tuned(img_graph, correction_rate)
+    # 解析実行（補正値は内部で0.027固定）
+    result, msg_or_img = analyze_graph_final(img_graph)
     
     if result is not None:
         diff_balls = result
-        res_img = msg_or_img
-        st.image(cv2.cvtColor(res_img, cv2.COLOR_BGR2RGB), caption=f"解析結果: {diff_balls:+}発", use_column_width=True)
+        # そのままの画像を表示（線なし）
+        st.image(cv2.cvtColor(msg_or_img, cv2.COLOR_BGR2RGB), caption=f"解析完了", use_column_width=True)
         st.success(f"推定差玉: {diff_balls} 発")
     else:
         st.error(f"エラー: {msg_or_img}")
@@ -202,11 +195,12 @@ with c2:
 c3, c4 = st.columns(2)
 with c3:
     count_300 = st.number_input("チャージ(300発) 回数", min_value=0, value=0)
-    # 初期値280
+    # チャージ初期値: 280
     payout_300 = st.number_input("チャージ 出玉/回", value=280)
 
 # 計算ボタン
 if st.button("回転率を計算する", type="primary"):
+    # ロジック
     real_spins = total_spins - st_spins_final
     total_payout = (count_3000 * payout_3000) + (count_1500 * payout_1500) + (count_300 * payout_300)
     used_balls = total_payout - diff_balls
