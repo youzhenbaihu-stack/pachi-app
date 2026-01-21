@@ -5,20 +5,89 @@ from PIL import Image
 import pytesseract
 import re
 
-# ページ設定
+# ページ設定 (Wideモードで広々と使う)
 st.set_page_config(page_title="パチンコ回転率アナライザー", page_icon="🎰", layout="wide")
 
+# ==========================================
+# ★★★ デザイン変更エリア（ここが魔法） ★★★
+# ==========================================
+st.markdown("""
+    <style>
+    /* 全体の背景をダークモード風グラデーションに */
+    .stApp {
+        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+        color: #ffffff;
+    }
+    
+    /* タイトルを金色に光らせる */
+    h1 {
+        color: #FFD700 !important;
+        text-shadow: 0 0 10px #FFD700, 0 0 20px #ff00de;
+        font-family: 'Helvetica Neue', sans-serif;
+        text-align: center;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #FFD700;
+    }
+    
+    /* サイドバーのデザイン */
+    section[data-testid="stSidebar"] {
+        background-color: #1a1a2e;
+        border-right: 1px solid #FFD700;
+    }
+    
+    /* 入力フォームの背景を半透明に */
+    .stNumberInput, .stFileUploader {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        padding: 10px;
+        border: 1px solid rgba(255, 215, 0, 0.3);
+    }
+    
+    /* ボタンを「激アツ」風にする */
+    .stButton > button {
+        background: linear-gradient(90deg, #FFD700, #FDB931);
+        color: black;
+        font-weight: bold;
+        border: none;
+        border-radius: 30px;
+        padding: 15px 30px;
+        font-size: 20px;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+    .stButton > button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 0 25px rgba(255, 215, 0, 1);
+        color: #fff;
+        background: linear-gradient(90deg, #ff0000, #ff5e00); /* ホバー時は赤く */
+    }
+    
+    /* 文字の色を読みやすく白系に調整 */
+    .stMarkdown, p, label {
+        color: #e0e0e0 !important;
+    }
+    
+    /* 成功メッセージ（緑）をネオン風に */
+    .stSuccess {
+        background-color: rgba(0, 255, 0, 0.1);
+        border: 1px solid #00ff00;
+        color: #00ff00;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # サイドバーでモード選択
-st.sidebar.title("メニュー")
-mode = st.sidebar.radio("機種タイプを選択してください", ["① 時短なし (スマパチ・ST機)", "② 時短あり (エヴァ・海など)"])
+st.sidebar.title("MENU")
+mode = st.sidebar.radio("機種タイプを選択", ["① 時短なし (スマパチ・ST機)", "② 時短あり (エヴァ・海など)"])
 
 # メインタイトル
 if mode == "① 時短なし (スマパチ・ST機)":
-    st.title("🎰 回転率アナライザー (時短なし)")
+    st.title("🎰 PRO ANALYZER (ST)")
 else:
-    st.title("🎰 回転率アナライザー (時短あり)")
+    st.title("🎰 PRO ANALYZER (JITAN)")
 
-st.markdown("グラフ画像と履歴画像をアップロードして、正確な回転率を算出します。")
+st.markdown("<p style='text-align: center;'>グラフと履歴をアップロードして、真の回転率を暴く。</p>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # 関数定義
@@ -69,7 +138,7 @@ def analyze_graph_final(img):
     else:
         zero_line_y = gy + (gh // 2)
 
-    # ★0ライン補正：0.027固定（内部処理のみ）
+    # ★0ライン補正：0.027固定
     correction_y = int(gh * 0.027) 
     zero_line_y -= correction_y
 
@@ -102,7 +171,6 @@ def analyze_graph_final(img):
     diff_pixels = zero_line_y - end_point_y
     est_diff_balls = diff_pixels * balls_per_pixel
 
-    # 画像は加工せずそのまま返す（赤線なし）
     return int(est_diff_balls), img
 
 def sum_red_start_counts(img):
@@ -134,107 +202,107 @@ def sum_red_start_counts(img):
 # メイン画面処理
 # ---------------------------------------------------------
 
-# --- 1. グラフ画像アップロード ---
-st.subheader("① グラフ画像の解析")
-uploaded_graph = st.file_uploader("グラフ画像をアップロード", type=['jpg', 'png', 'jpeg'], key="graph")
-
-diff_balls = 0
-
-if uploaded_graph is not None:
-    file_bytes = np.asarray(bytearray(uploaded_graph.read()), dtype=np.uint8)
-    img_graph = cv2.imdecode(file_bytes, 1)
-    
-    # 解析実行（補正値は内部で0.027固定）
-    result, msg_or_img = analyze_graph_final(img_graph)
-    
-    if result is not None:
-        diff_balls = result
-        st.image(cv2.cvtColor(msg_or_img, cv2.COLOR_BGR2RGB), caption=f"解析完了", use_column_width=True)
-        st.success(f"推定差玉: {diff_balls} 発")
-    else:
-        st.error(f"エラー: {msg_or_img}")
-
-
-# --- 2. 履歴画像アップロード ---
-st.subheader("② 履歴リストの解析（ST回転数）")
-uploaded_history = st.file_uploader("履歴画像（赤数字）をアップロード（任意）", type=['jpg', 'png', 'jpeg'], key="history")
-
-st_spins_auto = 0
-st_details = []
-
-if uploaded_history is not None:
-    file_bytes = np.asarray(bytearray(uploaded_history.read()), dtype=np.uint8)
-    img_hist = cv2.imdecode(file_bytes, 1)
-    
-    st_sum, num_list = sum_red_start_counts(img_hist)
-    st_spins_auto = st_sum
-    st_details = num_list
-    
-    st.info(f"検出された赤数字: {st_details}")
-    st.success(f"自動集計されたST回転数: {st_spins_auto} 回転")
-
-
-# --- 3. データ入力と計算 ---
-st.divider()
-st.subheader("③ データ入力と計算")
-
+# カラムを使ってレイアウトを整える
 col1, col2 = st.columns(2)
+
+# 左側：画像アップロードエリア
 with col1:
-    total_spins = st.number_input("現在の総回転数", min_value=0, value=3000, step=1)
+    st.markdown("### 📸 画像解析エリア")
+    st.markdown("---")
+    
+    uploaded_graph = st.file_uploader("① グラフ画像をアップロード", type=['jpg', 'png', 'jpeg'], key="graph")
+    diff_balls = 0
+
+    if uploaded_graph is not None:
+        file_bytes = np.asarray(bytearray(uploaded_graph.read()), dtype=np.uint8)
+        img_graph = cv2.imdecode(file_bytes, 1)
+        result, msg_or_img = analyze_graph_final(img_graph)
+        
+        if result is not None:
+            diff_balls = result
+            st.image(cv2.cvtColor(msg_or_img, cv2.COLOR_BGR2RGB), caption=f"解析完了", use_column_width=True)
+            st.success(f"推定差玉: {diff_balls} 発")
+        else:
+            st.error(f"エラー: {msg_or_img}")
+
+    st.markdown("<br>", unsafe_allow_html=True) # 余白
+
+    uploaded_history = st.file_uploader("② 履歴画像（赤数字）をアップロード", type=['jpg', 'png', 'jpeg'], key="history")
+    st_spins_auto = 0
+    st_details = []
+
+    if uploaded_history is not None:
+        file_bytes = np.asarray(bytearray(uploaded_history.read()), dtype=np.uint8)
+        img_hist = cv2.imdecode(file_bytes, 1)
+        st_sum, num_list = sum_red_start_counts(img_hist)
+        st_spins_auto = st_sum
+        st_details = num_list
+        st.info(f"検出: {st_details}")
+        st.success(f"ST回転数: {st_spins_auto} 回転")
+
+# 右側：計算入力エリア
 with col2:
+    st.markdown("### 🔢 データ入力エリア")
+    st.markdown("---")
+
+    total_spins = st.number_input("現在の総回転数", min_value=0, value=3000, step=1)
     st_spins_final = st.number_input("ラッシュ(ST)の回転数", min_value=0, value=st_spins_auto, step=1)
 
-# ★「時短あり」モードの時だけ表示する入力欄
-jitan_spins = 0
-if mode == "② 時短あり (エヴァ・海など)":
-    st.markdown("---")
-    st.info("💡 時短ありモード選択中：時短回転数を入力してください")
-    jitan_spins = st.number_input("時短中に回した回転数", min_value=0, value=0, step=1)
+    # 時短モードのみ表示
+    jitan_spins = 0
+    if mode == "② 時短あり (エヴァ・海など)":
+        st.warning("⚠️ 時短モードON")
+        jitan_spins = st.number_input("時短中に回した回転数", min_value=0, value=0, step=1)
 
-# 出玉内訳
-st.write("▼ 当たり内訳を入力")
-c1, c2 = st.columns(2)
-with c1:
-    count_3000 = st.number_input("上位(3000発) 回数", min_value=0, value=0)
-    payout_3000 = st.number_input("上位 出玉/回", value=2800)
-with c2:
-    count_1500 = st.number_input("通常(1500発) 回数", min_value=0, value=0)
-    payout_1500 = st.number_input("通常 出玉/回", value=1400)
+    st.markdown("#### ▼ 当たり内訳")
+    c_sub1, c_sub2 = st.columns(2)
+    with c_sub1:
+        count_3000 = st.number_input("上位(3000発) 回数", min_value=0, value=0)
+        payout_3000 = st.number_input("上位 出玉/回", value=2800)
+    with c_sub2:
+        count_1500 = st.number_input("通常(1500発) 回数", min_value=0, value=0)
+        payout_1500 = st.number_input("通常 出玉/回", value=1400)
 
-c3, c4 = st.columns(2)
-with c3:
-    count_300 = st.number_input("チャージ(300発) 回数", min_value=0, value=0)
-    payout_300 = st.number_input("チャージ 出玉/回", value=280)
-
-# 計算ボタン
-if st.button("回転率を計算する", type="primary"):
-    # ロジック（時短分も引く）
-    real_spins = total_spins - st_spins_final - jitan_spins
+    c_sub3, c_sub4 = st.columns(2)
+    with c_sub3:
+        count_300 = st.number_input("チャージ(300発) 回数", min_value=0, value=0)
+        payout_300 = st.number_input("チャージ 出玉/回", value=280)
     
-    total_payout = (count_3000 * payout_3000) + (count_1500 * payout_1500) + (count_300 * payout_300)
-    used_balls = total_payout - diff_balls
+    st.markdown("<br>", unsafe_allow_html=True)
     
-    st.markdown("### 📊 判定結果")
-    
-    # 内訳を表示
-    if jitan_spins > 0:
-        st.write(f"総回転数 {total_spins} - ST {st_spins_final} - 時短 {jitan_spins} =")
+    # 計算ボタン
+    if st.button("🔥 解析開始 (ANALYZE) 🔥", type="primary"):
+        real_spins = total_spins - st_spins_final - jitan_spins
+        total_payout = (count_3000 * payout_3000) + (count_1500 * payout_1500) + (count_300 * payout_300)
+        used_balls = total_payout - diff_balls
         
-    st.write(f"**実質通常回転数**: {real_spins} 回転")
-    st.write(f"**総出玉**: {total_payout:,} 発")
-    st.write(f"**推定差玉**: {diff_balls:+,} 発")
-    st.write(f"**推定投資**: {int(used_balls):,} 発 ({int(used_balls)*4:,} 円相当)")
-    
-    if used_balls > 0:
-        rate = (real_spins / used_balls) * 250
-        st.metric(label="1000円あたりの回転数", value=f"{rate:.2f} 回転")
+        # 結果表示エリア（カード風に）
+        st.markdown(f"""
+        <div style="background-color: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px; border: 2px solid #FFD700; text-align: center;">
+            <h3 style="color: #FFD700; margin-bottom: 0;">RESULT</h3>
+            <p style="color: #ccc;">実質通常回転数: {real_spins} 回転</p>
+            <p style="color: #ccc;">推定投資: {int(used_balls):,}発 ({int(used_balls)*4:,}円)</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        if rate >= 20:
-            st.balloons()
-            st.success("素晴らしい！文句なしの優秀台です！")
-        elif rate <= 15:
-            st.error("ボーダー以下の可能性が高いです。撤退を推奨します。")
+        if used_balls > 0:
+            rate = (real_spins / used_balls) * 250
+            
+            # 回転率をデカデカと表示
+            st.markdown(f"""
+            <div style="text-align: center; margin-top: 20px;">
+                <p style="font-size: 1.5em; color: white;">1000円あたりの回転数</p>
+                <h1 style="font-size: 5em; color: #00ff00; text-shadow: 0 0 20px #00ff00; margin: 0;">{rate:.2f}</h1>
+                <p style="font-size: 1.5em; color: white;">回転</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if rate >= 20:
+                st.balloons()
+                st.markdown("<h2 style='color: gold; text-align: center;'>🏆 優秀台 (Excellent) 🏆</h2>", unsafe_allow_html=True)
+            elif rate <= 15:
+                st.markdown("<h2 style='color: red; text-align: center;'>💀 回収台 (Danger) 💀</h2>", unsafe_allow_html=True)
+            else:
+                st.markdown("<h2 style='color: orange; text-align: center;'>⚠️ ボーダー付近 (Average) ⚠️</h2>", unsafe_allow_html=True)
         else:
-            st.warning("ボーダー付近、または微妙なラインです。")
-    else:
-        st.error("計算エラー：投資がマイナス（勝ちすぎ）です。出玉入力やグラフを確認してください。")
+            st.error("計算エラー：投資がマイナスです。")
