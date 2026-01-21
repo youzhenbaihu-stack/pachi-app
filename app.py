@@ -64,7 +64,7 @@ st.markdown("""
     }
     
     /* 文字色調整 */
-    .stMarkdown, p, label {
+    .stMarkdown, p, label, .stInfo {
         color: #e0e0e0 !important;
     }
     
@@ -73,6 +73,13 @@ st.markdown("""
         background-color: rgba(0, 255, 0, 0.1);
         border: 1px solid #00ff00;
         color: #00ff00;
+    }
+    
+    /* 注意書き（info）のデザイン */
+    .stAlert {
+        background-color: rgba(255, 215, 0, 0.1);
+        border: 1px solid #FFD700;
+        color: #FFD700;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -93,7 +100,7 @@ st.markdown("<p style='text-align: center;'>グラフと履歴をアップロー
 # 関数定義
 # ---------------------------------------------------------
 def analyze_graph_final(img):
-    """グラフ解析（0.027固定・線描画なし）"""
+    """グラフ解析（0.027固定・5色対応・線描画なし）"""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     height, width = img.shape[:2]
 
@@ -146,14 +153,21 @@ def analyze_graph_final(img):
     roi = img[gy:gy+gh, gx:gx+gw]
     hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     
+    # 色の定義
     mask_green = cv2.inRange(hsv_roi, np.array([30, 40, 40]), np.array([90, 255, 255]))
     mask_purple = cv2.inRange(hsv_roi, np.array([120, 40, 40]), np.array([165, 255, 255]))
     mask_orange1 = cv2.inRange(hsv_roi, np.array([0, 100, 100]), np.array([25, 255, 255]))
     mask_orange2 = cv2.inRange(hsv_roi, np.array([150, 100, 100]), np.array([180, 255, 255]))
+    
+    # ★追加機能：水色（シアン）対応
+    # H: 80~100 (OpenCVスケール) あたりが水色
+    mask_cyan = cv2.inRange(hsv_roi, np.array([80, 40, 40]), np.array([100, 255, 255]))
 
+    # 全ての色を合体
     mask_line = cv2.bitwise_or(mask_green, mask_purple)
     mask_line = cv2.bitwise_or(mask_line, mask_orange1)
     mask_line = cv2.bitwise_or(mask_line, mask_orange2)
+    mask_line = cv2.bitwise_or(mask_line, mask_cyan) # 水色追加
     
     contours_line_graph, _ = cv2.findContours(mask_line, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
@@ -207,6 +221,9 @@ with col1:
     st.markdown("### 📸 画像解析エリア")
     st.markdown("---")
     
+    # ★追加機能：注意事項の表示
+    st.info("💡 **Hint**: 添付する画像はなるべく **余白の部分をカット（トリミング）** して添付してください。解析精度が向上します。")
+
     # 1. グラフ画像
     uploaded_graph = st.file_uploader("① グラフ画像をアップロード", type=['jpg', 'png', 'jpeg'], key="graph")
     diff_balls = 0
@@ -225,11 +242,11 @@ with col1:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. 履歴画像（複数枚対応！）
+    # 2. 履歴画像
     uploaded_histories = st.file_uploader(
         "② 履歴画像（赤数字）をアップロード (複数枚可)", 
         type=['jpg', 'png', 'jpeg'], 
-        accept_multiple_files=True,  # ★ここが変更点：複数ファイル許可
+        accept_multiple_files=True,
         key="history"
     )
     
