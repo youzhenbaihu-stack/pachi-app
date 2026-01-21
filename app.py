@@ -5,11 +5,11 @@ from PIL import Image
 import pytesseract
 import re
 
-# ページ設定 (Wideモードで広々と使う)
+# ページ設定 (Wideモード)
 st.set_page_config(page_title="パチンコ回転率アナライザー", page_icon="🎰", layout="wide")
 
 # ==========================================
-# ★★★ デザイン変更エリア（ここが魔法） ★★★
+# ★★★ デザイン設定 (Dark & Gold) ★★★
 # ==========================================
 st.markdown("""
     <style>
@@ -19,7 +19,7 @@ st.markdown("""
         color: #ffffff;
     }
     
-    /* タイトルを金色に光らせる */
+    /* タイトルデザイン */
     h1 {
         color: #FFD700 !important;
         text-shadow: 0 0 10px #FFD700, 0 0 20px #ff00de;
@@ -29,13 +29,13 @@ st.markdown("""
         border-bottom: 2px solid #FFD700;
     }
     
-    /* サイドバーのデザイン */
+    /* サイドバー */
     section[data-testid="stSidebar"] {
         background-color: #1a1a2e;
         border-right: 1px solid #FFD700;
     }
     
-    /* 入力フォームの背景を半透明に */
+    /* 入力フォーム */
     .stNumberInput, .stFileUploader {
         background-color: rgba(255, 255, 255, 0.05);
         border-radius: 10px;
@@ -43,7 +43,7 @@ st.markdown("""
         border: 1px solid rgba(255, 215, 0, 0.3);
     }
     
-    /* ボタンを「激アツ」風にする */
+    /* ボタンデザイン */
     .stButton > button {
         background: linear-gradient(90deg, #FFD700, #FDB931);
         color: black;
@@ -60,15 +60,15 @@ st.markdown("""
         transform: scale(1.05);
         box-shadow: 0 0 25px rgba(255, 215, 0, 1);
         color: #fff;
-        background: linear-gradient(90deg, #ff0000, #ff5e00); /* ホバー時は赤く */
+        background: linear-gradient(90deg, #ff0000, #ff5e00);
     }
     
-    /* 文字の色を読みやすく白系に調整 */
+    /* 文字色調整 */
     .stMarkdown, p, label {
         color: #e0e0e0 !important;
     }
     
-    /* 成功メッセージ（緑）をネオン風に */
+    /* 成功メッセージ */
     .stSuccess {
         background-color: rgba(0, 255, 0, 0.1);
         border: 1px solid #00ff00;
@@ -81,7 +81,7 @@ st.markdown("""
 st.sidebar.title("MENU")
 mode = st.sidebar.radio("機種タイプを選択", ["① 時短なし (スマパチ・ST機)", "② 時短あり (エヴァ・海など)"])
 
-# メインタイトル
+# タイトル表示
 if mode == "① 時短なし (スマパチ・ST機)":
     st.title("🎰 PRO ANALYZER (ST)")
 else:
@@ -93,11 +93,11 @@ st.markdown("<p style='text-align: center;'>グラフと履歴をアップロー
 # 関数定義
 # ---------------------------------------------------------
 def analyze_graph_final(img):
-    """グラフの画像を解析して差玉を算出する（0.027固定・線描画なし）"""
+    """グラフ解析（0.027固定・線描画なし）"""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     height, width = img.shape[:2]
 
-    # 1. 枠検出
+    # 枠検出
     lower_bg = np.array([0, 5, 200])
     upper_bg = np.array([40, 60, 255])
     mask_bg = cv2.inRange(hsv, lower_bg, upper_bg)
@@ -119,7 +119,7 @@ def analyze_graph_final(img):
     gx, gy, gw, gh = graph_rect
     balls_per_pixel = 66000 / gh 
 
-    # 2. 0ライン検出
+    # 0ライン検出
     mid_start = gy + int(gh * 0.3)
     mid_end = gy + int(gh * 0.7)
     roi_mid = img[mid_start:mid_end, gx:gx+gw]
@@ -138,11 +138,11 @@ def analyze_graph_final(img):
     else:
         zero_line_y = gy + (gh // 2)
 
-    # ★0ライン補正：0.027固定
+    # 0ライン補正（0.027固定）
     correction_y = int(gh * 0.027) 
     zero_line_y -= correction_y
 
-    # 3. グラフ線検出
+    # グラフ線検出
     roi = img[gy:gy+gh, gx:gx+gw]
     hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     
@@ -190,7 +190,6 @@ def sum_red_start_counts(img):
     mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, kernel)
     mask_inverted = cv2.bitwise_not(mask)
     
-    # OCR実行
     config = r'--oem 3 --psm 6 outputbase digits'
     text = pytesseract.image_to_string(mask_inverted, config=config)
     numbers = re.findall(r'\d+', text)
@@ -199,17 +198,16 @@ def sum_red_start_counts(img):
     return sum(numbers), numbers
 
 # ---------------------------------------------------------
-# メイン画面処理
+# メイン画面レイアウト
 # ---------------------------------------------------------
-
-# カラムを使ってレイアウトを整える
 col1, col2 = st.columns(2)
 
-# 左側：画像アップロードエリア
+# === 左側：画像解析エリア ===
 with col1:
     st.markdown("### 📸 画像解析エリア")
     st.markdown("---")
     
+    # 1. グラフ画像
     uploaded_graph = st.file_uploader("① グラフ画像をアップロード", type=['jpg', 'png', 'jpeg'], key="graph")
     diff_balls = 0
 
@@ -225,30 +223,41 @@ with col1:
         else:
             st.error(f"エラー: {msg_or_img}")
 
-    st.markdown("<br>", unsafe_allow_html=True) # 余白
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    uploaded_history = st.file_uploader("② 履歴画像（赤数字）をアップロード", type=['jpg', 'png', 'jpeg'], key="history")
+    # 2. 履歴画像（複数枚対応！）
+    uploaded_histories = st.file_uploader(
+        "② 履歴画像（赤数字）をアップロード (複数枚可)", 
+        type=['jpg', 'png', 'jpeg'], 
+        accept_multiple_files=True,  # ★ここが変更点：複数ファイル許可
+        key="history"
+    )
+    
     st_spins_auto = 0
-    st_details = []
+    all_st_details = []
 
-    if uploaded_history is not None:
-        file_bytes = np.asarray(bytearray(uploaded_history.read()), dtype=np.uint8)
-        img_hist = cv2.imdecode(file_bytes, 1)
-        st_sum, num_list = sum_red_start_counts(img_hist)
-        st_spins_auto = st_sum
-        st_details = num_list
-        st.info(f"検出: {st_details}")
-        st.success(f"ST回転数: {st_spins_auto} 回転")
+    if uploaded_histories:
+        for uploaded_file in uploaded_histories:
+            file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+            img_hist = cv2.imdecode(file_bytes, 1)
+            
+            # 各画像の赤数字を集計
+            st_sum, num_list = sum_red_start_counts(img_hist)
+            st_spins_auto += st_sum
+            all_st_details.extend(num_list)
+        
+        st.info(f"検出された赤数字 (全{len(all_st_details)}件): {all_st_details}")
+        st.success(f"★ 合計ST回転数: {st_spins_auto} 回転")
 
-# 右側：計算入力エリア
+# === 右側：計算入力エリア ===
 with col2:
     st.markdown("### 🔢 データ入力エリア")
     st.markdown("---")
 
     total_spins = st.number_input("現在の総回転数", min_value=0, value=3000, step=1)
+    # 自動集計された合計値が初期値に入る
     st_spins_final = st.number_input("ラッシュ(ST)の回転数", min_value=0, value=st_spins_auto, step=1)
 
-    # 時短モードのみ表示
     jitan_spins = 0
     if mode == "② 時短あり (エヴァ・海など)":
         st.warning("⚠️ 時短モードON")
@@ -276,7 +285,7 @@ with col2:
         total_payout = (count_3000 * payout_3000) + (count_1500 * payout_1500) + (count_300 * payout_300)
         used_balls = total_payout - diff_balls
         
-        # 結果表示エリア（カード風に）
+        # 結果表示
         st.markdown(f"""
         <div style="background-color: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px; border: 2px solid #FFD700; text-align: center;">
             <h3 style="color: #FFD700; margin-bottom: 0;">RESULT</h3>
@@ -288,7 +297,6 @@ with col2:
         if used_balls > 0:
             rate = (real_spins / used_balls) * 250
             
-            # 回転率をデカデカと表示
             st.markdown(f"""
             <div style="text-align: center; margin-top: 20px;">
                 <p style="font-size: 1.5em; color: white;">1000円あたりの回転数</p>
