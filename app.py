@@ -29,7 +29,7 @@ st.markdown("""
         background-color: #1a1a2e;
         border-right: 1px solid #FFD700;
     }
-    .stNumberInput, .stFileUploader {
+    .stNumberInput, .stFileUploader, .stSelectbox {
         background-color: rgba(255, 255, 255, 0.05);
         border-radius: 10px;
         padding: 10px;
@@ -230,40 +230,65 @@ with col1:
 with col2:
     st.markdown("### 🔢 データ入力エリア")
     st.markdown("---")
-    # 入力項目を大幅シンプル化！
+    
+    # 1. 基本データ入力
     total_spins = st.number_input("現在の総回転数", min_value=0, value=3000, step=1)
     st_spins_final = st.number_input("ラッシュ(ST)の回転数", min_value=0, value=st_spins_auto, step=1)
-
+    
     jitan_spins = 0
     if mode == "② 時短あり (エヴァ・海など)":
         st.warning("⚠️ 時短モードON")
         jitan_spins = st.number_input("時短中に回した回転数", min_value=0, value=0, step=1)
 
-    st.markdown("#### ▼ 当たりデータ（データ機どおりに入力）")
+    # 2. 当たりデータ入力（新ロジック）
+    st.markdown("#### ▼ 当たりデータ (データ機通りに入力)")
     
-    # ★ここが変更点：総回数方式
-    total_hits = st.number_input("総大当たり回数（データ機の表示）", min_value=0, value=0)
-    
-    c_sub1, c_sub2 = st.columns(2)
-    with c_sub1:
-        # チャージ・小当たり回数
-        charge_hits = st.number_input("うち、チャージ/小当たり回数", min_value=0, value=0)
-    with c_sub2:
-        # メイン出玉設定
-        payout_main = st.number_input("メイン出玉/回 (基本1400)", value=1400)
+    c_data1, c_data2 = st.columns(2)
+    with c_data1:
+        total_hits = st.number_input("総当たり回数", min_value=0, value=0)
+    with c_data2:
+        first_hits = st.number_input("初当たり回数", min_value=0, value=0)
         
-    payout_charge = 280 # チャージは固定（必要なら可変に）
+    # 自動計算：ST中当たり回数
+    st_hits = total_hits - first_hits
+    if st_hits < 0: st_hits = 0
+    st.info(f"📊 計算上のST中当たり回数: **{st_hits} 回**")
+
+    st.markdown("#### ▼ 出玉詳細設定")
+    
+    # ST中の出玉設定
+    st_payout = st.number_input("ST中の平均出玉 (基本1500)", value=1500, step=10)
+
+    # 初当たりの内訳設定
+    c_fail1, c_fail2 = st.columns(2)
+    with c_fail1:
+        # 負けた時の出玉（選択式）
+        fail_payout = st.selectbox("通常(ST落ち)の出玉", [1500, 1200, 1050, 450, 300], index=4)
+    with c_fail2:
+        # 負けた回数
+        fail_count = st.number_input("通常(ST落ち)の回数", min_value=0, max_value=first_hits, value=0)
+    
+    # RUSH突入回数（自動）
+    rush_entry_count = first_hits - fail_count
+    # RUSH突入時の出玉（基本1500だが、機種によっては300などあるので変更可能に）
+    rush_entry_payout = st.number_input("RUSH突入時の出玉 (基本1500)", value=1500, step=10)
 
     st.markdown("<br>", unsafe_allow_html=True)
     
     if st.button("🔥 解析開始 (ANALYZE) 🔥", type="primary"):
         real_spins = total_spins - st_spins_final - jitan_spins
         
-        # ★新計算ロジック
-        # (総回数 - チャージ回数) * メイン出玉 + (チャージ回数 * 280)
-        main_hits = total_hits - charge_hits
-        total_payout = (main_hits * payout_main) + (charge_hits * payout_charge)
+        # ★計算ロジック
+        # 1. ST中出玉 = (総当たり - 初当たり) * ST平均出玉
+        income_st = st_hits * st_payout
         
+        # 2. 初当たり出玉
+        # A. 通常(ST落ち) = 回数 * 選択した出玉
+        income_fail = fail_count * fail_payout
+        # B. RUSH突入 = (初当たり - 落ちた回数) * 突入出玉
+        income_entry = rush_entry_count * rush_entry_payout
+        
+        total_payout = income_st + income_fail + income_entry
         used_balls = total_payout - diff_balls
         
         st.markdown(f"""
