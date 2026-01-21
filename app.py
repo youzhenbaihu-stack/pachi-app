@@ -13,13 +13,10 @@ st.set_page_config(page_title="パチンコ回転率アナライザー", page_ic
 # ==========================================
 st.markdown("""
     <style>
-    /* 全体の背景をダークモード風グラデーションに */
     .stApp {
         background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
         color: #ffffff;
     }
-    
-    /* タイトルデザイン */
     h1 {
         color: #FFD700 !important;
         text-shadow: 0 0 10px #FFD700, 0 0 20px #ff00de;
@@ -28,22 +25,16 @@ st.markdown("""
         padding-bottom: 20px;
         border-bottom: 2px solid #FFD700;
     }
-    
-    /* サイドバー */
     section[data-testid="stSidebar"] {
         background-color: #1a1a2e;
         border-right: 1px solid #FFD700;
     }
-    
-    /* 入力フォーム */
     .stNumberInput, .stFileUploader {
         background-color: rgba(255, 255, 255, 0.05);
         border-radius: 10px;
         padding: 10px;
         border: 1px solid rgba(255, 215, 0, 0.3);
     }
-    
-    /* ボタンデザイン */
     .stButton > button {
         background: linear-gradient(90deg, #FFD700, #FDB931);
         color: black;
@@ -62,20 +53,14 @@ st.markdown("""
         color: #fff;
         background: linear-gradient(90deg, #ff0000, #ff5e00);
     }
-    
-    /* 文字色調整 */
     .stMarkdown, p, label, .stInfo {
         color: #e0e0e0 !important;
     }
-    
-    /* 成功メッセージ */
     .stSuccess {
         background-color: rgba(0, 255, 0, 0.1);
         border: 1px solid #00ff00;
         color: #00ff00;
     }
-    
-    /* 注意書き（info）のデザイン */
     .stAlert {
         background-color: rgba(255, 215, 0, 0.1);
         border: 1px solid #FFD700;
@@ -84,11 +69,10 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# サイドバーでモード選択
+# サイドバー
 st.sidebar.title("MENU")
 mode = st.sidebar.radio("機種タイプを選択", ["① 時短なし (スマパチ・ST機)", "② 時短あり (エヴァ・海など)"])
 
-# タイトル表示
 if mode == "① 時短なし (スマパチ・ST機)":
     st.title("🎰 PRO ANALYZER (ST)")
 else:
@@ -100,59 +84,42 @@ st.markdown("<p style='text-align: center;'>グラフと履歴をアップロー
 # 関数定義
 # ---------------------------------------------------------
 def extract_graph_area(img):
-    """
-    画像の中からベージュ色のグラフ領域だけを特定して切り抜く関数。
-    """
+    """ベージュ領域の自動切り抜き"""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     height, width = img.shape[:2]
-    
-    # ベージュ色（グラフ背景）の定義
     lower_bg = np.array([0, 5, 200])
     upper_bg = np.array([40, 60, 255])
     mask_bg = cv2.inRange(hsv, lower_bg, upper_bg)
-    
     kernel = np.ones((5,5), np.uint8)
     mask_bg = cv2.morphologyEx(mask_bg, cv2.MORPH_CLOSE, kernel)
-    
     contours, _ = cv2.findContours(mask_bg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     if contours:
         largest_cnt = max(contours, key=cv2.contourArea)
         x, y, w, h = cv2.boundingRect(largest_cnt)
-        
         image_area = width * height
         rect_area = w * h
-        
-        # 判定ロジック: 80%以上ならそのまま、それ以下なら切り抜き
         if rect_area > (image_area * 0.8):
             return img, (0, 0, width, height)
         else:
             return img[y:y+h, x:x+w], (x, y, w, h)
-            
     return img, (0, 0, width, height)
 
 def analyze_graph_final(img):
-    """グラフ解析（自動トリミング・スケール70000発・5色対応）"""
-    
-    # ★ステップ1：自動トリミング
+    """グラフ解析（スケール70000発・5色対応）"""
     cropped_img, rect = extract_graph_area(img)
-    
     hsv = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2HSV)
     height, width = cropped_img.shape[:2]
-
-    # ★修正ポイント：スケールを「70000発」に設定
     balls_per_pixel = 70000 / height 
-    
     gx, gy, gw, gh = 0, 0, width, height 
 
-    # --- 0ライン検出 ---
+    # 0ライン検出
     mid_start = int(height * 0.3)
     mid_end = int(height * 0.7)
     roi_mid = cropped_img[mid_start:mid_end, :]
     gray_mid = cv2.cvtColor(roi_mid, cv2.COLOR_BGR2GRAY)
     sobel_y = cv2.Sobel(gray_mid, cv2.CV_8U, 0, 1, ksize=3)
     _, binary_line = cv2.threshold(sobel_y, 50, 255, cv2.THRESH_BINARY)
-    
     line_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (width // 5, 1))
     detected_lines = cv2.morphologyEx(binary_line, cv2.MORPH_OPEN, line_kernel)
     contours_line, _ = cv2.findContours(detected_lines, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -164,28 +131,20 @@ def analyze_graph_final(img):
         zero_line_y = mid_start + ly + (lh // 2)
     else:
         zero_line_y = height // 2
-
-    # 0ライン補正なし（中心基準）
-    correction_y = 0 
-    zero_line_y -= correction_y
-
-    # --- グラフ線検出 ---
-    hsv_roi = hsv 
     
-    # 5色対応
+    # グラフ線検出
+    hsv_roi = hsv 
     mask_green = cv2.inRange(hsv_roi, np.array([30, 40, 40]), np.array([90, 255, 255]))
     mask_purple = cv2.inRange(hsv_roi, np.array([120, 40, 40]), np.array([165, 255, 255]))
     mask_orange1 = cv2.inRange(hsv_roi, np.array([0, 100, 100]), np.array([25, 255, 255]))
     mask_orange2 = cv2.inRange(hsv_roi, np.array([150, 100, 100]), np.array([180, 255, 255]))
     mask_cyan = cv2.inRange(hsv_roi, np.array([80, 40, 40]), np.array([100, 255, 255]))
-
     mask_line = cv2.bitwise_or(mask_green, mask_purple)
     mask_line = cv2.bitwise_or(mask_line, mask_orange1)
     mask_line = cv2.bitwise_or(mask_line, mask_orange2)
     mask_line = cv2.bitwise_or(mask_line, mask_cyan)
     
     contours_line_graph, _ = cv2.findContours(mask_line, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
     if not contours_line_graph: return None, "グラフ線が見つかりませんでした"
 
     all_points = []
@@ -195,13 +154,9 @@ def analyze_graph_final(img):
 
     all_points.sort(key=lambda p: p[0])
     end_point_local = all_points[-1]
-    
     end_point_y = end_point_local[1]
     diff_pixels = zero_line_y - end_point_y
-    
-    # 差玉算出
     est_diff_balls = diff_pixels * balls_per_pixel
-
     return int(est_diff_balls), cropped_img
 
 def sum_red_start_counts(img):
@@ -240,8 +195,6 @@ with col1:
     if uploaded_graph is not None:
         file_bytes = np.asarray(bytearray(uploaded_graph.read()), dtype=np.uint8)
         img_graph = cv2.imdecode(file_bytes, 1)
-        
-        # 解析実行
         result, msg_or_img = analyze_graph_final(img_graph)
         
         if result is not None:
@@ -277,7 +230,7 @@ with col1:
 with col2:
     st.markdown("### 🔢 データ入力エリア")
     st.markdown("---")
-
+    # 入力項目を大幅シンプル化！
     total_spins = st.number_input("現在の総回転数", min_value=0, value=3000, step=1)
     st_spins_final = st.number_input("ラッシュ(ST)の回転数", min_value=0, value=st_spins_auto, step=1)
 
@@ -286,25 +239,31 @@ with col2:
         st.warning("⚠️ 時短モードON")
         jitan_spins = st.number_input("時短中に回した回転数", min_value=0, value=0, step=1)
 
-    st.markdown("#### ▼ 当たり内訳")
+    st.markdown("#### ▼ 当たりデータ（データ機どおりに入力）")
+    
+    # ★ここが変更点：総回数方式
+    total_hits = st.number_input("総大当たり回数（データ機の表示）", min_value=0, value=0)
+    
     c_sub1, c_sub2 = st.columns(2)
     with c_sub1:
-        count_3000 = st.number_input("上位(3000発) 回数", min_value=0, value=0)
-        payout_3000 = st.number_input("上位 出玉/回", value=2800)
+        # チャージ・小当たり回数
+        charge_hits = st.number_input("うち、チャージ/小当たり回数", min_value=0, value=0)
     with c_sub2:
-        count_1500 = st.number_input("通常(1500発) 回数", min_value=0, value=0)
-        payout_1500 = st.number_input("通常 出玉/回", value=1400)
+        # メイン出玉設定
+        payout_main = st.number_input("メイン出玉/回 (基本1400)", value=1400)
+        
+    payout_charge = 280 # チャージは固定（必要なら可変に）
 
-    c_sub3, c_sub4 = st.columns(2)
-    with c_sub3:
-        count_300 = st.number_input("チャージ(300発) 回数", min_value=0, value=0)
-        payout_300 = st.number_input("チャージ 出玉/回", value=280)
-    
     st.markdown("<br>", unsafe_allow_html=True)
     
     if st.button("🔥 解析開始 (ANALYZE) 🔥", type="primary"):
         real_spins = total_spins - st_spins_final - jitan_spins
-        total_payout = (count_3000 * payout_3000) + (count_1500 * payout_1500) + (count_300 * payout_300)
+        
+        # ★新計算ロジック
+        # (総回数 - チャージ回数) * メイン出玉 + (チャージ回数 * 280)
+        main_hits = total_hits - charge_hits
+        total_payout = (main_hits * payout_main) + (charge_hits * payout_charge)
+        
         used_balls = total_payout - diff_balls
         
         st.markdown(f"""
@@ -317,7 +276,6 @@ with col2:
         
         if used_balls > 0:
             rate = (real_spins / used_balls) * 250
-            
             st.markdown(f"""
             <div style="text-align: center; margin-top: 20px;">
                 <p style="font-size: 1.5em; color: white;">1000円あたりの回転数</p>
@@ -325,7 +283,6 @@ with col2:
                 <p style="font-size: 1.5em; color: white;">回転</p>
             </div>
             """, unsafe_allow_html=True)
-            
             if rate >= 20:
                 st.balloons()
                 st.markdown("<h2 style='color: gold; text-align: center;'>🏆 優秀台 (Excellent) 🏆</h2>", unsafe_allow_html=True)
