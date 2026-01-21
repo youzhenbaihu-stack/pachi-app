@@ -99,40 +99,77 @@ st.markdown("<p style='text-align: center;'>グラフと履歴をアップロー
 # ---------------------------------------------------------
 # 関数定義
 # ---------------------------------------------------------
-def analyze_graph_final(img):
-    """グラフ解析（0.027固定・5色対応・線描画なし）"""
+def extract_graph_area(img):
+    """
+    画像の中からベージュ色のグラフ領域だけを特定して切り抜く関数。
+    すでに切り抜かれている場合は、そのままの画像を返す。
+    """
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     height, width = img.shape[:2]
-
-    # 枠検出
+    
+    # ベージュ色（グラフ背景）の定義
     lower_bg = np.array([0, 5, 200])
     upper_bg = np.array([40, 60, 255])
     mask_bg = cv2.inRange(hsv, lower_bg, upper_bg)
+    
+    # ノイズ除去
     kernel = np.ones((5,5), np.uint8)
     mask_bg = cv2.morphologyEx(mask_bg, cv2.MORPH_CLOSE, kernel)
     
-    contours_bg, _ = cv2.findContours(mask_bg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    graph_rect = None
-    if contours_bg:
-        sorted_cnts = sorted(contours_bg, key=cv2.contourArea, reverse=True)
-        for cnt in sorted_cnts:
-            x, y, w, h = cv2.boundingRect(cnt)
-            if w > width * 0.5 and h > height * 0.2:
-                graph_rect = (x, y, w, h)
-                break
+    # 輪郭検出
+    contours, _ = cv2.findContours(mask_bg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
-    if graph_rect is None: return None, "グラフ枠が見つかりませんでした"
+    if contours:
+        # 一番大きなベージュ領域を探す
+        largest_cnt = max(contours, key=cv2.contourArea)
+        x, y, w, h = cv2.boundingRect(largest_cnt)
+        
+        # 判定ロジック:
+        # もし検出されたベージュ領域が、画像の面積の80%以上を占めているなら
+        # 「すでにトリミング済みの画像」と判断して、元の画像をそのまま使う。
+        # 逆に、もっと小さければ「スクショ全体画像」と判断して、その部分だけ切り抜く。
+        
+        image_area = width * height
+        rect_area = w * h
+        
+        if rect_area > (image_area * 0.8):
+            # すでにほぼ全体がグラフなので、そのまま返す
+            return img, (0, 0, width, height)
+        else:
+            # 周りに黒い余白があるので、切り抜く
+            cropped_img = img[y:y+h, x:x+w]
+            return cropped_img, (x, y, w, h)
+            
+    # ベージュが見つからない場合は、とりあえずそのまま返す
+    return img, (0, 0, width, height)
 
-    gx, gy, gw, gh = graph_rect
-    balls_per_pixel = 66000 / gh 
+def analyze_graph_final(img):
+    """グラフ解析（自動トリミング・0.027固定・5色対応）"""
+    
+    # ★ステップ1：まずはグラフ領域だけを綺麗に抽出する
+    cropped_img, rect = extract_graph_area(img)
+    
+    # ここから先は「cropped_img（グラフ部分だけ）」に対して処理を行う
+    hsv = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2HSV)
+    height, width = cropped_img.shape[:2]
 
-    # 0ライン検出
-    mid_start = gy + int(gh * 0.3)
-    mid_end = gy + int(gh * 0.7)
-    roi_mid = img[mid_start:mid_end, gx:gx+gw]
+    # --- 基準設定 ---
+    # グラフ領域の高さそのものを使って計算する
+    # ※66000という定数は、グラフ画像の縦幅が6万発分のスケールであるという前提
+    balls_per_pixel = 66000 / height 
+    
+    gx, gy, gw, gh = 0, 0, width, height # 切り抜き済みなので全体を使う
+
+    # --- 0ライン検出 ---
+    # 中央付近を探す
+    mid_start = int(height * 0.3)
+    mid_end = int(height * 0.7)
+    
+    roi_mid = cropped_img[mid_start:mid_end, :]
     gray_mid = cv2.cvtColor(roi_mid, cv2.COLOR_BGR2GRAY)
     sobel_y = cv2.Sobel(gray_mid, cv2.CV_8U, 0, 1, ksize=3)
     _, binary_line = cv2.threshold(sobel_y, 50, 255, cv2.THRESH_BINARY)
+    
     line_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (width // 5, 1))
     detected_lines = cv2.morphologyEx(binary_line, cv2.MORPH_OPEN, line_kernel)
     contours_line, _ = cv2.findContours(detected_lines, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -143,31 +180,29 @@ def analyze_graph_final(img):
         lx, ly, lw, lh = cv2.boundingRect(c)
         zero_line_y = mid_start + ly + (lh // 2)
     else:
-        zero_line_y = gy + (gh // 2)
+        # 見つからない場合は画像のちょうど真ん中とする
+        zero_line_y = height // 2
 
     # 0ライン補正（0.027固定）
-    correction_y = int(gh * 0.027) 
+    correction_y = int(height * 0.027) 
     zero_line_y -= correction_y
 
-    # グラフ線検出
-    roi = img[gy:gy+gh, gx:gx+gw]
-    hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+    # --- グラフ線検出 ---
+    # 画像全体から線を探す
+    hsv_roi = hsv # すでに切り抜き済みなので全体
     
     # 色の定義
     mask_green = cv2.inRange(hsv_roi, np.array([30, 40, 40]), np.array([90, 255, 255]))
     mask_purple = cv2.inRange(hsv_roi, np.array([120, 40, 40]), np.array([165, 255, 255]))
     mask_orange1 = cv2.inRange(hsv_roi, np.array([0, 100, 100]), np.array([25, 255, 255]))
     mask_orange2 = cv2.inRange(hsv_roi, np.array([150, 100, 100]), np.array([180, 255, 255]))
-    
-    # ★追加機能：水色（シアン）対応
-    # H: 80~100 (OpenCVスケール) あたりが水色
-    mask_cyan = cv2.inRange(hsv_roi, np.array([80, 40, 40]), np.array([100, 255, 255]))
+    mask_cyan = cv2.inRange(hsv_roi, np.array([80, 40, 40]), np.array([100, 255, 255])) # 水色
 
     # 全ての色を合体
     mask_line = cv2.bitwise_or(mask_green, mask_purple)
     mask_line = cv2.bitwise_or(mask_line, mask_orange1)
     mask_line = cv2.bitwise_or(mask_line, mask_orange2)
-    mask_line = cv2.bitwise_or(mask_line, mask_cyan) # 水色追加
+    mask_line = cv2.bitwise_or(mask_line, mask_cyan)
     
     contours_line_graph, _ = cv2.findContours(mask_line, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
@@ -178,14 +213,19 @@ def analyze_graph_final(img):
         for p in cnt: all_points.append(p[0])
     if not all_points: return None, "線データなし"
 
+    # 一番右の点（最新の差玉）を探す
     all_points.sort(key=lambda p: p[0])
     end_point_local = all_points[-1]
-    end_point_y = gy + end_point_local[1]
-
+    
+    # 差分ピクセル
+    end_point_y = end_point_local[1]
     diff_pixels = zero_line_y - end_point_y
+    
+    # 差玉計算
     est_diff_balls = diff_pixels * balls_per_pixel
 
-    return int(est_diff_balls), img
+    # 結果として返す画像は、解析に使った「切り抜き画像」を返す
+    return int(est_diff_balls), cropped_img
 
 def sum_red_start_counts(img):
     """履歴画像の赤文字をOCRで集計する"""
@@ -221,7 +261,7 @@ with col1:
     st.markdown("### 📸 画像解析エリア")
     st.markdown("---")
     
-    # ★追加機能：注意事項の表示
+    # 注意事項
     st.info("💡 **Hint**: 添付する画像はなるべく **余白の部分をカット（トリミング）** して添付してください。解析精度が向上します。")
 
     # 1. グラフ画像
@@ -231,11 +271,14 @@ with col1:
     if uploaded_graph is not None:
         file_bytes = np.asarray(bytearray(uploaded_graph.read()), dtype=np.uint8)
         img_graph = cv2.imdecode(file_bytes, 1)
+        
+        # 解析実行（自動トリミング機能付き）
         result, msg_or_img = analyze_graph_final(img_graph)
         
         if result is not None:
             diff_balls = result
-            st.image(cv2.cvtColor(msg_or_img, cv2.COLOR_BGR2RGB), caption=f"解析完了", use_column_width=True)
+            # 切り抜かれた後の画像を表示
+            st.image(cv2.cvtColor(msg_or_img, cv2.COLOR_BGR2RGB), caption=f"解析範囲", use_column_width=True)
             st.success(f"推定差玉: {diff_balls} 発")
         else:
             st.error(f"エラー: {msg_or_img}")
