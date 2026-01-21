@@ -62,8 +62,8 @@ def analyze_graph_multi_color_tuned(img):
     else:
         zero_line_y = gy + (gh // 2)
 
-    # ★修正箇所1：0ライン補正（2% -> 1%に変更）
-    correction_y = int(gh * 0.01) 
+    # ★修正箇所：0ライン補正（0.5%に変更）
+    correction_y = int(gh * 0.005) 
     zero_line_y -= correction_y
 
     # 3. グラフ線検出
@@ -198,7 +198,7 @@ with c2:
 c3, c4 = st.columns(2)
 with c3:
     count_300 = st.number_input("チャージ(300発) 回数", min_value=0, value=0)
-    # ★修正箇所2：チャージのデフォルト値を280に変更
+    # チャージの初期値は280に設定済み
     payout_300 = st.number_input("チャージ 出玉/回", value=280)
 
 # 計算ボタン
