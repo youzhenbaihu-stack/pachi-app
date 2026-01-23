@@ -7,9 +7,8 @@ import re
 import os
 
 # ==========================================
-# ★設定エリア：ここだけ変えればOK★
+# ★設定エリア★
 # ==========================================
-# アプリのロック解除パスワード（これをNoteの有料エリアに書く）
 APP_PASSWORD = "777" 
 
 # ==========================================
@@ -25,12 +24,11 @@ def check_password():
     def password_entered():
         if st.session_state["password"] == APP_PASSWORD:
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # パスワードをセッションから消す（安全のため）
+            del st.session_state["password"]
         else:
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
-        # まだパスワードが入力されていない場合
         st.markdown("""
         <style>
         .stApp { background-color: #1a1a2e; color: white; }
@@ -40,12 +38,9 @@ def check_password():
         <p style='text-align: center;'>このツールを利用するにはパスワードが必要です。<br>
         パスワードはNote記事の有料エリアに記載されています。</p>
         """, unsafe_allow_html=True)
-        
         st.text_input("パスワードを入力", type="password", on_change=password_entered, key="password")
         return False
-    
     elif not st.session_state["password_correct"]:
-        # パスワードが間違っている場合
         st.markdown("""
         <style>.stApp { background-color: #1a1a2e; color: white; }</style>
         <h1 style='text-align: center; color: #FFD700;'>🔒 PRO ANALYZER LOGIN</h1>
@@ -53,44 +48,23 @@ def check_password():
         st.text_input("パスワードを入力", type="password", on_change=password_entered, key="password")
         st.error("パスワードが違います")
         return False
-    
     else:
-        # パスワード正解
         return True
 
-# 認証チェック実行
 if not check_password():
-    st.stop()  # 認証されていない場合はここで処理を止める（下のアプリ画面を見せない）
-
-# ==========================================
-# 👇 ここから下がいつものアプリ本体 👇
-# ==========================================
-
-# ... (ここから下のコードは、前回の「決定版コード」と同じ中身が続きます)
-# デザイン設定、関数定義、画面レイアウトなどをそのまま続けてください。
-# 長くなるので、以下に「認証通過後の中身」として貼り付けるべきコードを記載します。
-
-# ==========================================
-# ★★★ UIの非表示設定（メニューやフッターを消す） ★★★
-# ==========================================
-hide_streamlit_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            </style>
-            """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+    st.stop()
 
 # ==========================================
 # ★★★ デザイン設定 (Dark & Gold) ★★★
 # ==========================================
 st.markdown("""
     <style>
+    /* 全体の背景 */
     .stApp {
         background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
         color: #ffffff;
     }
+    /* タイトル */
     h1 {
         color: #FFD700 !important;
         text-shadow: 0 0 10px #FFD700, 0 0 20px #ff00de;
@@ -99,16 +73,19 @@ st.markdown("""
         padding-bottom: 20px;
         border-bottom: 2px solid #FFD700;
     }
+    /* サイドバー背景 */
     section[data-testid="stSidebar"] {
         background-color: #1a1a2e;
         border-right: 1px solid #FFD700;
     }
+    /* 入力フォーム */
     .stNumberInput, .stFileUploader, .stSelectbox {
         background-color: rgba(255, 255, 255, 0.05);
         border-radius: 10px;
         padding: 10px;
         border: 1px solid rgba(255, 215, 0, 0.3);
     }
+    /* ボタン */
     .stButton > button {
         background: linear-gradient(90deg, #FFD700, #FDB931);
         color: black;
@@ -127,6 +104,7 @@ st.markdown("""
         color: #fff;
         background: linear-gradient(90deg, #ff0000, #ff5e00);
     }
+    /* 文字色 */
     .stMarkdown, p, label, .stInfo {
         color: #e0e0e0 !important;
     }
@@ -135,12 +113,24 @@ st.markdown("""
         border: 1px solid #00ff00;
         color: #00ff00;
     }
-    /* ガイド部分のデザイン */
+    .stAlert {
+        background-color: rgba(255, 215, 0, 0.1);
+        border: 1px solid #FFD700;
+        color: #FFD700;
+    }
+    /* ガイド部分 */
     .streamlit-expanderHeader {
         background-color: #302b63;
         color: #FFD700;
         font-weight: bold;
     }
+    
+    /* ★★★ ここが修正ポイント！ ★★★ */
+    /* 右上の「...」メニューだけを消す（左上のサイドバーボタンは残る） */
+    #MainMenu {visibility: hidden;}
+    /* 下の「Made with Streamlit」フッターを消す */
+    footer {visibility: hidden;}
+    /* ヘッダー全体（header）は消さないこと！ */
     </style>
     """, unsafe_allow_html=True)
 
@@ -148,7 +138,7 @@ st.markdown("""
 st.sidebar.title("MENU")
 mode = st.sidebar.radio("機種タイプを選択", ["① 時短なし (スマパチ・ST機)", "② 時短あり (エヴァ・海など)"])
 
-# ★タイトル変更：サイトセブン専用を強調
+# タイトル
 if mode == "① 時短なし (スマパチ・ST機)":
     st.title("🎰 SITE7 PRO ANALYZER (ST)")
 else:
@@ -174,7 +164,7 @@ with st.expander("🔰 初めての方へ：使い方と画像の例 (クリッ�
     
     col_sample1, col_sample2 = st.columns(2)
     
-    # サンプル画像の表示（ファイルがあれば表示、なければ説明のみ）
+    # サンプル画像の表示
     with col_sample1:
         if os.path.exists("sample_graph.png"):
             st.image("sample_graph.png", caption="【推奨】スランプグラフ", use_column_width=True)
@@ -410,4 +400,3 @@ with col2:
                 st.markdown("<h2 style='color: orange; text-align: center;'>⚠️ ボーダー付近 (Average) ⚠️</h2>", unsafe_allow_html=True)
         else:
             st.error("計算エラー：投資がマイナスです。")
-
