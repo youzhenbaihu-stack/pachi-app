@@ -71,6 +71,18 @@ if not check_password():
 # 長くなるので、以下に「認証通過後の中身」として貼り付けるべきコードを記載します。
 
 # ==========================================
+# ★★★ UIの非表示設定（メニューやフッターを消す） ★★★
+# ==========================================
+hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+# ==========================================
 # ★★★ デザイン設定 (Dark & Gold) ★★★
 # ==========================================
 st.markdown("""
@@ -398,3 +410,4 @@ with col2:
                 st.markdown("<h2 style='color: orange; text-align: center;'>⚠️ ボーダー付近 (Average) ⚠️</h2>", unsafe_allow_html=True)
         else:
             st.error("計算エラー：投資がマイナスです。")
+
