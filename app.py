@@ -4,9 +4,10 @@ import numpy as np
 from PIL import Image
 import pytesseract
 import re
+import os
 
 # ページ設定 (Wideモード)
-st.set_page_config(page_title="パチンコ回転率アナライザー", page_icon="🎰", layout="wide")
+st.set_page_config(page_title="サイトセブン専用 回転率アナライザー", page_icon="🎰", layout="wide")
 
 # ==========================================
 # ★★★ デザイン設定 (Dark & Gold) ★★★
@@ -61,10 +62,11 @@ st.markdown("""
         border: 1px solid #00ff00;
         color: #00ff00;
     }
-    .stAlert {
-        background-color: rgba(255, 215, 0, 0.1);
-        border: 1px solid #FFD700;
+    /* ガイド部分のデザイン */
+    .streamlit-expanderHeader {
+        background-color: #302b63;
         color: #FFD700;
+        font-weight: bold;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -73,12 +75,44 @@ st.markdown("""
 st.sidebar.title("MENU")
 mode = st.sidebar.radio("機種タイプを選択", ["① 時短なし (スマパチ・ST機)", "② 時短あり (エヴァ・海など)"])
 
+# ★タイトル変更：サイトセブン専用を強調
 if mode == "① 時短なし (スマパチ・ST機)":
-    st.title("🎰 PRO ANALYZER (ST)")
+    st.title("🎰 SITE7 PRO ANALYZER (ST)")
 else:
-    st.title("🎰 PRO ANALYZER (JITAN)")
+    st.title("🎰 SITE7 PRO ANALYZER (JITAN)")
 
-st.markdown("<p style='text-align: center;'>グラフと履歴をアップロードして、真の回転率を暴く。</p>", unsafe_allow_html=True)
+# ==========================================
+# ★★★ 使い方ガイド & サンプル画像 ★★★
+# ==========================================
+with st.expander("🔰 初めての方へ：使い方と画像の例 (クリックで開く)", expanded=True):
+    st.markdown("""
+    ### 📝 利用手順
+    1. **サイトセブン** で台データの詳細を開きます。
+    2. **「スランプグラフ」** と **「大当たり履歴」** のスクリーンショットを撮ります。
+       - ※グラフは余白があってもOKですが、なるべくグラフ部分を大きく撮ると精度が上がります。
+    3. 下のアップロードエリアに画像をセットします。
+    4. 右側のエリアに、データランプの **「総回転数」「総当り回数」「初当り回数」** を入力します。
+    5. **「解析開始」** ボタンを押すと、真の回転率（千円スタート）が表示されます。
+    """)
+    
+    st.markdown("---")
+    st.markdown("### 📸 推奨画像サンプル")
+    st.caption("以下のような画像を保存してアップロードしてください。")
+    
+    col_sample1, col_sample2 = st.columns(2)
+    
+    # サンプル画像の表示（ファイルがあれば表示、なければ説明のみ）
+    with col_sample1:
+        if os.path.exists("sample_graph.png"):
+            st.image("sample_graph.png", caption="【推奨】スランプグラフ", use_column_width=True)
+        else:
+            st.info("ここにグラフ画像の見本が表示されます (sample_graph.png をアップロードしてください)")
+            
+    with col_sample2:
+        if os.path.exists("sample_history.png"):
+            st.image("sample_history.png", caption="【推奨】履歴リスト (赤数字)", use_column_width=True)
+        else:
+            st.info("ここに履歴画像の見本が表示されます (sample_history.png をアップロードしてください)")
 
 # ---------------------------------------------------------
 # 関数定義
@@ -187,8 +221,7 @@ col1, col2 = st.columns(2)
 with col1:
     st.markdown("### 📸 画像解析エリア")
     st.markdown("---")
-    st.info("💡 **Hint**: 余白が多い画像は、自動でグラフ部分だけ切り抜いて解析します。")
-
+    
     uploaded_graph = st.file_uploader("① グラフ画像をアップロード", type=['jpg', 'png', 'jpeg'], key="graph")
     diff_balls = 0
 
@@ -249,28 +282,21 @@ with col2:
     with c_data2:
         first_hits = st.number_input("初当たり回数", min_value=0, value=0)
         
-    # 自動計算：ST中当たり回数
     st_hits = total_hits - first_hits
     if st_hits < 0: st_hits = 0
     st.info(f"📊 計算上のST中当たり回数: **{st_hits} 回**")
 
     st.markdown("#### ▼ 出玉詳細設定")
     
-    # ST中の出玉設定
     st_payout = st.number_input("ST中の平均出玉 (基本1500)", value=1500, step=10)
 
-    # 初当たりの内訳設定
     c_fail1, c_fail2 = st.columns(2)
     with c_fail1:
-        # 負けた時の出玉（選択式）
         fail_payout = st.selectbox("通常(ST落ち)の出玉", [1500, 1200, 1050, 450, 300], index=4)
     with c_fail2:
-        # 負けた回数
         fail_count = st.number_input("通常(ST落ち)の回数", min_value=0, max_value=first_hits, value=0)
     
-    # RUSH突入回数（自動）
     rush_entry_count = first_hits - fail_count
-    # RUSH突入時の出玉（基本1500だが、機種によっては300などあるので変更可能に）
     rush_entry_payout = st.number_input("RUSH突入時の出玉 (基本1500)", value=1500, step=10)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -278,14 +304,8 @@ with col2:
     if st.button("🔥 解析開始 (ANALYZE) 🔥", type="primary"):
         real_spins = total_spins - st_spins_final - jitan_spins
         
-        # ★計算ロジック
-        # 1. ST中出玉 = (総当たり - 初当たり) * ST平均出玉
         income_st = st_hits * st_payout
-        
-        # 2. 初当たり出玉
-        # A. 通常(ST落ち) = 回数 * 選択した出玉
         income_fail = fail_count * fail_payout
-        # B. RUSH突入 = (初当たり - 落ちた回数) * 突入出玉
         income_entry = rush_entry_count * rush_entry_payout
         
         total_payout = income_st + income_fail + income_entry
