@@ -145,7 +145,6 @@ if model in ["① 沖ドキGOLD (金ドキ/区間)", "② 沖ドキBLACK (黒ド
         
         st.info(f"📊 **精密・有利区間消化: {total_yuuri} G** \n\n(通常{history_sum}G + ボナ{bonus_sum}G + 現在{current_g}G) ※{calc_note}計算")
         
-        # プロ仕様のエラーチェック（入力漏れ防止）
         if len(nums) != (bb_count + rb_count) and len(nums) > 0:
             st.markdown(f"<div class='alert-text'>⚠️ 警告: 履歴の個数（{len(nums)}個）と、BIG/REGの合計回数（{bb_count + rb_count}回）がズレています！データランプを確認してください。</div>", unsafe_allow_html=True)
 
@@ -219,15 +218,33 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
                 "action": "次回ボーナス終了時に有利区間が切れ、<b>金ドキモード（天国以上）へ移行する大チャンス</b>です。大連チャンに期待！<br><b>【やめどき】</b>連チャン終了後、32G回して即ヤメ。"
             })
         elif total_yuuri >= 1400:
+            needed_g = 2000 - total_yuuri
+            target_cross_g = current_g + needed_g
+            
+            # 【重要】最短投資と最深投資の出し分け
+            if target_cross_g < ceiling_target:
+                cost_cross = calc_investment(current_g, target_cross_g)
+                cost_ceiling = calc_investment(current_g, ceiling_target)
+                
+                cost_str = f"""
+                <div style="font-size: 0.5em; line-height: 1.2; color: #ccc; margin-top: 5px; font-weight: normal;">最短 ({target_cross_g}G到達)</div>
+                <div style="line-height: 1.2; color: #FFD700;">¥ {cost_cross:,}</div>
+                <div style="font-size: 0.5em; line-height: 1.2; color: #ccc; margin-top: 5px; font-weight: normal;">最深 (天井)</div>
+                <div style="line-height: 1.2; color: #ff4444;">¥ {cost_ceiling:,}</div>
+                """
+            else:
+                cost_str = f"¥ {calc_investment(current_g, ceiling_target):,}"
+
             plans.append({
                 "title": "👑 有利区間狙い (2000Gクロス)",
                 "color": "#FFD700",
-                "desc": f"有利区間あと {2000 - total_yuuri}G。今のボーナスで踏む可能性大。",
+                "desc": f"有利区間あと {needed_g}G。{target_cross_g}G以降の当選で次回金ドキのチャンス！",
                 "target_g": ceiling_target,
-                "cost": calc_investment(current_g, ceiling_target),
+                "cost_str": cost_str, # 専用の表示文字列をセット
                 "type": "CEILING",
-                "action": "次回ボーナスで有利区間2000Gを踏む（クロスする）ことが目標。もし2000Gを超えても天国に上がらなかった場合は、区間が切れていない可能性があるため、再計算して追うか判断が必要になります。<br><b>【やめどき】</b>天国抜け後32Gヤメ。"
+                "action": f"まずは最短目標の<b>{target_cross_g}G</b>到達を目指します。もし到達前に当たってしまった場合は区間が切れない可能性があるため、押し引きの判断が必要です。<br><b>【やめどき】</b>天国抜け後32Gヤメ。"
             })
+            
         elif is_reset and current_g <= 200:
             plans.append({
                 "title": "🔄 リセット・チャンス狙い (200G)",
@@ -347,10 +364,15 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
     # 結果カードの描画
     # ==========================================
     for plan in plans:
-        cost_txt = "---"
+        # 特別な金額フォーマットが設定されている場合はそれを使う
         if plan.get("type") != "STOP":
-            investment = plan.get("cost", calc_investment(current_g, plan["target_g"]))
-            cost_txt = f"¥ {investment:,}"
+            if "cost_str" in plan:
+                cost_txt = plan["cost_str"]
+            else:
+                investment = plan.get("cost", calc_investment(current_g, plan["target_g"]))
+                cost_txt = f"¥ {investment:,}"
+        else:
+            cost_txt = "---"
 
         action_html = ""
         if 'action' in plan:
