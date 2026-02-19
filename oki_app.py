@@ -60,6 +60,7 @@ st.markdown("""
     .plan-title { font-size: 1.3em; font-weight: bold; margin-bottom: 10px; display: block; }
     .cost-display { font-size: 1.8em; font-weight: bold; }
     .tag { background-color: #333; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; color: #ccc; margin-right: 5px; }
+    .alert-text { color: #ff4444; font-size: 0.9em; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -74,16 +75,6 @@ def calc_investment(start_g, end_g):
     needed = end_g - start_g
     cost = (needed / COIN_BASE) * 1000
     return int(((cost // 1000) + 1) * 1000)
-
-def parse_history(text, current_g):
-    """履歴テキストから有利区間消化G数を計算"""
-    if not text: return current_g, 0
-    nums = re.findall(r'\d+', text)
-    bonus_count = len(nums)
-    # ボーナス中の消化G数 (BIG/REG平均 60G程度と仮定)
-    history_sum = sum([int(n) for n in nums])
-    total = history_sum + (bonus_count * 69) + current_g
-    return total, bonus_count
 
 # ==========================================
 # 入力エリア
@@ -106,7 +97,7 @@ with col2:
 # --- 機種別入力 ---
 through_count = 0
 prev_hit_g = 0
-history_input = ""
+total_yuuri = current_g # デフォルト
 
 if "DUO" in model:
     through_count = st.number_input("スルー回数 (天国間)", min_value=0, value=1)
@@ -115,20 +106,48 @@ elif "BLACK" in model:
     prev_hit_g = st.number_input("前回の当選ゲーム数 (1スルー時判定用)", min_value=0, value=100)
     st.caption("※1スルーの狙い目判定に使います")
 
+# ----------------------------------------------------
+# 👑 ガチ仕様：有利区間精密計算 (GOLD / BLACK / ゴージャス)
+# ----------------------------------------------------
 if model in ["① 沖ドキGOLD (金ドキ/区間)", "② 沖ドキBLACK (黒ドキ/区間)", "④ 沖ドキゴージャス (深区間)"]:
-    st.markdown("#### ▼ 有利区間計算")
+    st.markdown("#### ▼ 【ガチ仕様】有利区間 精密計算")
     st.error("""
     ⚠️ **【重要】履歴入力のルール**
     有利区間は「天国（32G以内の連チャン）」を抜けた時点でリセットされます。
-    **必ず『前回の天国抜け以降のゲーム数』だけを入力**してください。
+    **必ず『前回の天国抜け以降』のデータだけを入力**してください。
     """)
-    history_input = st.text_area("履歴G数 (例: 120 45 320)", height=70, help="スペース区切りで入力")
     
-    if history_input:
-        total_yuuri, b_count = parse_history(history_input, current_g)
-        st.info(f"📊 推定有利区間消化: **{total_yuuri} G** (ボナ{b_count}回)")
-    else:
-        total_yuuri = current_g 
+    history_input = st.text_area("履歴G数 (例: 120 45 320)", height=70, help="スペース区切りで通常ゲーム数を入力")
+    
+    col_b, col_r = st.columns(2)
+    with col_b:
+        bb_count = st.number_input("BIG回数 (天国抜け後)", min_value=0, value=0)
+    with col_r:
+        rb_count = st.number_input("REG回数 (天国抜け後)", min_value=0, value=0)
+
+    # 精密計算ロジック
+    if history_input or bb_count > 0 or rb_count > 0:
+        nums = re.findall(r'\d+', history_input) if history_input else []
+        history_sum = sum([int(n) for n in nums])
+        
+        # 機種別の純増に合わせたボーナス消化G数
+        if "BLACK" in model:
+            bb_g = 59
+            rb_g = 24
+            calc_note = "BIG=59G / REG=24G"
+        else:
+            bb_g = 70
+            rb_g = 30
+            calc_note = "BIG=70G / REG=30G"
+            
+        bonus_sum = (bb_count * bb_g) + (rb_count * rb_g)
+        total_yuuri = history_sum + bonus_sum + current_g
+        
+        st.info(f"📊 **精密・有利区間消化: {total_yuuri} G** \n\n(通常{history_sum}G + ボナ{bonus_sum}G + 現在{current_g}G) ※{calc_note}計算")
+        
+        # プロ仕様のエラーチェック（入力漏れ防止）
+        if len(nums) != (bb_count + rb_count) and len(nums) > 0:
+            st.markdown(f"<div class='alert-text'>⚠️ 警告: 履歴の個数（{len(nums)}個）と、BIG/REGの合計回数（{bb_count + rb_count}回）がズレています！データランプを確認してください。</div>", unsafe_allow_html=True)
 
 # ==========================================
 # 🔥 判定ロジック & 表示
@@ -137,7 +156,6 @@ st.markdown("<br>", unsafe_allow_html=True)
 
 if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
     st.markdown("---")
-    
     plans = []
     
     # ----------------------------------------------------
@@ -326,7 +344,7 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
             plans.append({"title": "✋ STOP", "color": "#777", "desc": "有利区間2300G、または通常600Gから。", "type": "STOP"})
 
     # ==========================================
-    # 結果カードの描画 (修正済み)
+    # 結果カードの描画
     # ==========================================
     for plan in plans:
         cost_txt = "---"
@@ -334,12 +352,10 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
             investment = plan.get("cost", calc_investment(current_g, plan["target_g"]))
             cost_txt = f"¥ {investment:,}"
 
-        # HTMLタグのインデントを削除して1行にする（バグ対策）
         action_html = ""
         if 'action' in plan:
             action_html = f"""<div style="background-color: rgba(255, 255, 255, 0.05); padding: 12px; border-radius: 8px; margin-top: 15px; border-left: 4px solid {plan['color']};"><div style="font-size: 0.9em; font-weight: bold; color: {plan['color']}; margin-bottom: 5px;">▶ 予想される展開・やめどき</div><div style="font-size: 0.9em; line-height: 1.5; color: #eee;">{plan['action']}</div></div>"""
 
-        # HTMLレンダリング
         st.markdown(f"""
         <div class="strategy-box" style="border-color: {plan['color']};">
             <span class="plan-title" style="color: {plan['color']};">{plan['title']}</span>
