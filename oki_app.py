@@ -97,18 +97,18 @@ with col2:
 # --- 機種別入力 ---
 through_count = 0
 prev_hit_g = 0
-total_yuuri = current_g # デフォルト
+total_yuuri = current_g 
 
 if "DUO" in model:
     through_count = st.number_input("スルー回数 (天国間)", min_value=0, value=1)
     st.caption("※DUOは 2スルー、4スルー、6スルー以上 が狙い目です")
-elif "BLACK" in model:
+elif model in ["① 沖ドキGOLD (金ドキ/区間)", "② 沖ドキBLACK (黒ドキ/区間)"]:
     through_count = st.number_input("スルー回数", min_value=0, value=1)
-    prev_hit_g = st.number_input("前回の当選ゲーム数 (1スルー時判定用)", min_value=0, value=100)
-    st.caption("※1スルーの狙い目判定に使います")
+    prev_hit_g = st.number_input("前回の当選ゲーム数 (1スルー時判定用)", min_value=0, value=140)
+    st.caption("※朝一1スルーの通常B狙い判定などに使います")
 
 # ----------------------------------------------------
-# 👑 ガチ仕様：有利区間精密計算 (GOLD / BLACK / ゴージャス)
+# 👑 ガチ仕様：有利区間精密計算
 # ----------------------------------------------------
 if model in ["① 沖ドキGOLD (金ドキ/区間)", "② 沖ドキBLACK (黒ドキ/区間)", "④ 沖ドキゴージャス (深区間)"]:
     st.markdown("#### ▼ 【ガチ仕様】有利区間 精密計算")
@@ -157,13 +157,12 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
     plans = []
     
     # ----------------------------------------------------
-    # 1. 沖ドキDUO (完全ユーザー指摘反映版)
+    # 1. 沖ドキDUO
     # ----------------------------------------------------
     if "DUO" in model:
         zone_target = 400
         ceiling_target = 800
         
-        # ★修正: 期待値がプラスになるスルー回数のみを狙う (2, 4, 6以上)
         if through_count >= 6:
             plans.append({
                 "title": "👑 スルー天井ツッパ (絶対GO)",
@@ -184,7 +183,6 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
                 "action": "次のボーナス当選まで打ち切ります。<br><b>【やめどき】</b>基本はボーナス後32G(or 35G)ヤメ。<br>⚠️終了画面「夕方」やドキハナチャンス失敗時は次回も期待値が高いため続行。"
             })
         elif current_g < 400:
-            # ★修正: プランB(天井ツッパ)を削除し、400G絶対ヤメを強調
             plans.append({
                 "title": "🅰️ 400G仮天井 ゾーン狙い",
                 "color": "#00ff00",
@@ -251,27 +249,51 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
                 "action": f"まずは最短目標の<b>{target_cross_g}G</b>到達を目指します。もし到達前に当たってしまった場合は区間が切れない可能性があるため、押し引きの判断が必要です。<br><b>【やめどき】</b>天国抜け後32Gヤメ。"
             })
             
-        elif is_reset and current_g <= 200:
-            plans.append({
-                "title": "🔄 リセット・チャンス狙い (200G)",
-                "color": "#00ff00",
-                "desc": "チャンスモード天井(200G)まで。当たらなければヤメ。",
-                "target_g": 200,
-                "cost": calc_investment(current_g, 200),
-                "type": "ZONE",
-                "action": "チャンスモードの天井(200G)での当選に期待。<br><b>【やめどき】</b>200Gで当たらなければ即ヤメ。当たった場合は32G回してヤメ。"
-            })
-        elif current_g >= 700:
-            plans.append({
-                "title": "📈 天井狙い (700G~)",
-                "color": "#00ff00",
-                "desc": "ゲーム数天井狙い。有利区間が浅くても打てます。",
-                "target_g": ceiling_target,
-                "type": "CEILING",
-                "action": "ゲーム数天井(999G)でのボーナス当選。<br><b>【やめどき】</b>当選後、32G回してヤメ。有利区間が深くない場合は深追い厳禁。"
-            })
         else:
-             plans.append({"title": "✋ 様子見推奨 (STOP)", "color": "#777", "desc": "狙い目ラインに達していません。", "type": "STOP"})
+            border = 999
+            
+            # 朝一1スルー 通常B狙い (実戦ボーダー400G~)
+            if through_count == 1 and prev_hit_g <= 150:
+                border = 400
+                if current_g >= border:
+                    cost_ceiling = calc_investment(current_g, ceiling_target)
+                    cost_str = f"""
+                    <div style="font-size: 0.5em; line-height: 1.2; color: #ccc; margin-top: 5px; font-weight: normal;">最短(即当たり) 〜 最悪(天井リスク)</div>
+                    <div style="line-height: 1.2; color: #00ff00;">¥ 1,000 〜 ¥ {cost_ceiling:,}</div>
+                    """
+                    plans.append({
+                        "title": "🔥 朝一1スルー 通常B狙い",
+                        "color": "#00ff00",
+                        "desc": f"前回{prev_hit_g}G当選。通常B滞在の期待大！道中での早い当たりに期待する立ち回りです。",
+                        "target_g": ceiling_target,
+                        "cost_str": cost_str,
+                        "type": "MODE_B",
+                        "action": "ゲーム数天井(999G)リスクはありますが、通常Bの恩恵（早い当たり＆天国移行）を狙います。<br><b>【やめどき】</b>天国抜け後、32G回してヤメ。"
+                    })
+                else:
+                    plans.append({"title": "✋ まだ早いです", "color": "#777", "desc": f"朝一1スルーの通常B狙いは {border}G から。", "type": "STOP"})
+            
+            elif is_reset and current_g <= 200:
+                plans.append({
+                    "title": "🔄 リセット・チャンス狙い (200G)",
+                    "color": "#00ff00",
+                    "desc": "チャンスモード天井(200G)まで。当たらなければヤメ。",
+                    "target_g": 200,
+                    "cost": calc_investment(current_g, 200),
+                    "type": "ZONE",
+                    "action": "チャンスモードの天井(200G)での当選に期待。<br><b>【やめどき】</b>200Gで当たらなければ即ヤメ。当たった場合は32G回してヤメ。"
+                })
+            elif current_g >= 700:
+                plans.append({
+                    "title": "📈 天井狙い (700G~)",
+                    "color": "#00ff00",
+                    "desc": "ゲーム数天井狙い。有利区間が浅くても打てます。",
+                    "target_g": ceiling_target,
+                    "type": "CEILING",
+                    "action": "ゲーム数天井(999G)でのボーナス当選。<br><b>【やめどき】</b>当選後、32G回してヤメ。有利区間が深くない場合は深追い厳禁。"
+                })
+            else:
+                 plans.append({"title": "✋ 様子見推奨 (STOP)", "color": "#777", "desc": "狙い目ラインに達していません。", "type": "STOP"})
 
     # ----------------------------------------------------
     # 3. 沖ドキBLACK
@@ -279,16 +301,17 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
     elif "BLACK" in model:
         ceiling_target = 999
         
-        if total_yuuri >= 1900:
+        # 実戦ボーダー 1500G~ に変更
+        if total_yuuri >= 1500:
              cost_ceiling = calc_investment(current_g, ceiling_target)
              cost_str = f"""
              <div style="font-size: 0.5em; line-height: 1.2; color: #ccc; margin-top: 5px; font-weight: normal;">最短(即当たり) 〜 最深(天井)</div>
              <div style="line-height: 1.2; color: #FFD700;">¥ 1,000 〜 ¥ {cost_ceiling:,}</div>
              """
              plans.append({
-                "title": "⚫ BLACK 有利区間狙い (1900G~)",
+                "title": "⚫ BLACK 有利区間狙い (1500G~)",
                 "color": "#FFD700",
-                "desc": "すでに区間1900Gを超えています！いつ当たっても黒ドキチャンス！",
+                "desc": "実戦上のボーダー1500Gを超えています。ここから黒ドキチャンス！",
                 "target_g": ceiling_target,
                 "cost_str": cost_str,
                 "type": "CEILING",
@@ -296,45 +319,68 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
             })
         else:
             border = 999
-            if through_count == 1:
-                border = 520 if prev_hit_g <= 150 else 700
-                desc = f"1スルー(前回{prev_hit_g}G当選)のボーダー: {border}G"
-            elif through_count == 2:
-                border = 610
-                desc = "2スルーボーダー: 610G"
-            elif through_count >= 3:
-                border = 580
-                desc = "3スルーボーダー: 580G"
+            
+            # 朝一1スルー 通常B狙い (実戦ボーダー300G~)
+            if through_count == 1 and prev_hit_g <= 150:
+                border = 300
+                if current_g >= border:
+                    cost_ceiling = calc_investment(current_g, ceiling_target)
+                    cost_str = f"""
+                    <div style="font-size: 0.5em; line-height: 1.2; color: #ccc; margin-top: 5px; font-weight: normal;">最短(即当たり) 〜 最悪(天井リスク)</div>
+                    <div style="line-height: 1.2; color: #00ff00;">¥ 1,000 〜 ¥ {cost_ceiling:,}</div>
+                    """
+                    plans.append({
+                        "title": "🔥 朝一1スルー 通常B狙い",
+                        "color": "#00ff00",
+                        "desc": f"前回{prev_hit_g}G当選。通常B滞在の期待大！道中での早い当たりに期待する立ち回りです。",
+                        "target_g": ceiling_target,
+                        "cost_str": cost_str,
+                        "type": "MODE_B",
+                        "action": "ゲーム数天井(999G)リスクはありますが、通常Bの恩恵（早い当たり＆天国移行）を狙います。<br><b>【やめどき】</b>天国抜け後、32G回してヤメ。"
+                    })
+                else:
+                    plans.append({"title": "✋ まだ早いです", "color": "#777", "desc": f"朝一1スルーの通常B狙いは {border}G から。", "type": "STOP"})
+                    
             else:
-                border = 670
-                desc = "0スルーボーダー: 670G"
-                if is_reset: 
-                    if current_g <= 32:
-                        plans.append({
-                            "title": "🔄 リセット32Gカニ歩き", "color":"#00ff00", "desc":"32Gまで", "target_g":32, "type":"ZONE",
-                            "action": "32Gで当たらなければ即ヤメ。当たれば32Gフォロー。"
-                        })
-                        border = 9999
-                    elif 100 <= current_g <= 130:
-                        plans.append({
-                            "title": "🔄 リセット100Gゾーン", "color":"#00ff00", "desc":"130Gまで", "target_g":130, "type":"ZONE",
-                            "action": "130Gで当たらなければ即ヤメ。当たれば32Gフォロー。"
-                        })
-                        border = 9999
-                    else:
-                        border = 670
+                if through_count == 1:
+                    border = 600
+                    desc = f"1スルー(前回{prev_hit_g}G当選)のボーダー: {border}G"
+                elif through_count == 2:
+                    border = 610
+                    desc = "2スルーボーダー: 610G"
+                elif through_count >= 3:
+                    border = 580
+                    desc = "3スルーボーダー: 580G"
+                else:
+                    border = 670
+                    desc = "0スルーボーダー: 670G"
+                    if is_reset: 
+                        if current_g <= 32:
+                            plans.append({
+                                "title": "🔄 リセット32Gカニ歩き", "color":"#00ff00", "desc":"32Gまで", "target_g":32, "type":"ZONE",
+                                "action": "32Gで当たらなければ即ヤメ。当たれば32Gフォロー。"
+                            })
+                            border = 9999
+                        elif 100 <= current_g <= 130:
+                            plans.append({
+                                "title": "🔄 リセット100Gゾーン", "color":"#00ff00", "desc":"130Gまで", "target_g":130, "type":"ZONE",
+                                "action": "130Gで当たらなければ即ヤメ。当たれば32Gフォロー。"
+                            })
+                            border = 9999
+                        else:
+                            border = 670
 
-            if current_g >= border and border != 9999:
-                plans.append({
-                    "title": f"📈 {through_count}スルー 天井狙い",
-                    "color": "#00ff00",
-                    "desc": desc,
-                    "target_g": ceiling_target,
-                    "type": "CEILING",
-                    "action": "ゲーム数天井(999G)でボーナス当選。<br><b>【やめどき】</b>天国抜け後、32G回してヤメ。"
-                })
-            elif border != 9999:
-                 plans.append({"title": "✋ まだ早いです", "color": "#777", "desc": f"狙い目は {border}G から。", "type": "STOP"})
+                if current_g >= border and border != 9999:
+                    plans.append({
+                        "title": f"📈 {through_count}スルー 天井狙い",
+                        "color": "#00ff00",
+                        "desc": desc,
+                        "target_g": ceiling_target,
+                        "type": "CEILING",
+                        "action": "ゲーム数天井(999G)でボーナス当選。<br><b>【やめどき】</b>天国抜け後、32G回してヤメ。"
+                    })
+                elif border != 9999:
+                     plans.append({"title": "✋ まだ早いです", "color": "#777", "desc": f"狙い目は {border}G から。", "type": "STOP"})
 
     # ----------------------------------------------------
     # 4. 沖ドキゴージャス
