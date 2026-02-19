@@ -209,11 +209,18 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
         ceiling_target = 999
         
         if total_yuuri >= 2000:
+            # ★【修正箇所】すでに条件クリアしている場合は「最短〜最深」で表示
+            cost_ceiling = calc_investment(current_g, ceiling_target)
+            cost_str = f"""
+            <div style="font-size: 0.5em; line-height: 1.2; color: #ccc; margin-top: 5px; font-weight: normal;">最短(即当たり) 〜 最深(天井)</div>
+            <div style="line-height: 1.2; color: #FF00FF;">¥ 1,000 〜 ¥ {cost_ceiling:,}</div>
+            """
             plans.append({
                 "title": "🔥 激アツ！有利区間天井到達",
                 "color": "#FF00FF",
-                "desc": "区間2000Gを超えています。ボーナス当選→天国移行まで全ツッパ！",
+                "desc": "すでに区間2000Gを超えています！いつ当たっても次回金ドキの大チャンス！",
                 "target_g": ceiling_target,
+                "cost_str": cost_str,
                 "type": "CEILING",
                 "action": "次回ボーナス終了時に有利区間が切れ、<b>金ドキモード（天国以上）へ移行する大チャンス</b>です。大連チャンに期待！<br><b>【やめどき】</b>連チャン終了後、32G回して即ヤメ。"
             })
@@ -221,7 +228,6 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
             needed_g = 2000 - total_yuuri
             target_cross_g = current_g + needed_g
             
-            # 【重要】最短投資と最深投資の出し分け
             if target_cross_g < ceiling_target:
                 cost_cross = calc_investment(current_g, target_cross_g)
                 cost_ceiling = calc_investment(current_g, ceiling_target)
@@ -240,7 +246,7 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
                 "color": "#FFD700",
                 "desc": f"有利区間あと {needed_g}G。{target_cross_g}G以降の当選で次回金ドキのチャンス！",
                 "target_g": ceiling_target,
-                "cost_str": cost_str, # 専用の表示文字列をセット
+                "cost_str": cost_str,
                 "type": "CEILING",
                 "action": f"まずは最短目標の<b>{target_cross_g}G</b>到達を目指します。もし到達前に当たってしまった場合は区間が切れない可能性があるため、押し引きの判断が必要です。<br><b>【やめどき】</b>天国抜け後32Gヤメ。"
             })
@@ -274,11 +280,18 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
         ceiling_target = 999
         
         if total_yuuri >= 1900:
+             # ★【修正箇所】すでに条件クリアしている場合
+             cost_ceiling = calc_investment(current_g, ceiling_target)
+             cost_str = f"""
+             <div style="font-size: 0.5em; line-height: 1.2; color: #ccc; margin-top: 5px; font-weight: normal;">最短(即当たり) 〜 最深(天井)</div>
+             <div style="line-height: 1.2; color: #FFD700;">¥ 1,000 〜 ¥ {cost_ceiling:,}</div>
+             """
              plans.append({
                 "title": "⚫ BLACK 有利区間狙い (1900G~)",
                 "color": "#FFD700",
-                "desc": "黒ドキチャンス！天国まで打ち切り推奨。",
+                "desc": "すでに区間1900Gを超えています！いつ当たっても黒ドキチャンス！",
                 "target_g": ceiling_target,
+                "cost_str": cost_str,
                 "type": "CEILING",
                 "action": "次回ボーナス当選後、有利区間がリセットされ<b>黒ドキモード（次回天国以上確定）へ移行する大チャンス</b>です。<br><b>【やめどき】</b>連チャン終了後、32G回して即ヤメ。"
             })
@@ -331,11 +344,18 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
         ceiling_target = 999
         
         if total_yuuri >= 2300:
+            # ★【修正箇所】すでに条件クリアしている場合
+            cost_ceiling = calc_investment(current_g, ceiling_target)
+            cost_str = f"""
+            <div style="font-size: 0.5em; line-height: 1.2; color: #ccc; margin-top: 5px; font-weight: normal;">最短(即当たり) 〜 最深(天井)</div>
+            <div style="line-height: 1.2; color: #FFD700;">¥ 1,000 〜 ¥ {cost_ceiling:,}</div>
+            """
             plans.append({
                 "title": "💎 ゴージャス 有利区間狙い",
                 "color": "#FFD700",
-                "desc": "区間2300G越え。3000G付近の区間切れまでGO！",
+                "desc": "すでに区間2300G越え。いつ当たっても区間切れチャンス！",
                 "target_g": ceiling_target,
+                "cost_str": cost_str,
                 "type": "CEILING",
                 "action": "有利区間3000G付近の区間切れでの恩恵（ドキドキモード等）に期待。<br><b>【やめどき】</b>天国連チャン終了後、32G回して即ヤメ。"
             })
