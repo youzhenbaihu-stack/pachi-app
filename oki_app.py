@@ -101,6 +101,7 @@ total_yuuri = current_g # デフォルト
 
 if "DUO" in model:
     through_count = st.number_input("スルー回数 (天国間)", min_value=0, value=1)
+    st.caption("※DUOは 2スルー、4スルー、6スルー以上 が狙い目です")
 elif "BLACK" in model:
     through_count = st.number_input("スルー回数", min_value=0, value=1)
     prev_hit_g = st.number_input("前回の当選ゲーム数 (1スルー時判定用)", min_value=0, value=100)
@@ -125,12 +126,10 @@ if model in ["① 沖ドキGOLD (金ドキ/区間)", "② 沖ドキBLACK (黒ド
     with col_r:
         rb_count = st.number_input("REG回数 (天国抜け後)", min_value=0, value=0)
 
-    # 精密計算ロジック
     if history_input or bb_count > 0 or rb_count > 0:
         nums = re.findall(r'\d+', history_input) if history_input else []
         history_sum = sum([int(n) for n in nums])
         
-        # 機種別の純増に合わせたボーナス消化G数
         if "BLACK" in model:
             bb_g = 59
             rb_g = 24
@@ -158,48 +157,51 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
     plans = []
     
     # ----------------------------------------------------
-    # 1. 沖ドキDUO
+    # 1. 沖ドキDUO (完全ユーザー指摘反映版)
     # ----------------------------------------------------
     if "DUO" in model:
         zone_target = 400
         ceiling_target = 800
         
-        if through_count >= 3 or through_count == 2:
+        # ★修正: 期待値がプラスになるスルー回数のみを狙う (2, 4, 6以上)
+        if through_count >= 6:
             plans.append({
-                "title": "👑 スルー天井狙い (問答無用)",
+                "title": "👑 スルー天井ツッパ (絶対GO)",
                 "color": "#FFD700",
-                "desc": "2スルー以上は期待値が高いです。当たるまで打ち切り推奨。",
+                "desc": f"現在{through_count}スルー。期待値の塊です。天国に上がるまで全ツッパ推奨！",
                 "target_g": ceiling_target,
                 "type": "CEILING",
-                "action": "ボーナス当選まで打ち切ります。<br><b>【やめどき】</b>基本はボーナス後32G(or 35G)ヤメ。<br>⚠️終了画面「夕方」は次回天国濃厚、ドキハナチャンス失敗時は次回ドキハナ確率50%のため<b>絶対続行</b>です。"
+                "action": "天国移行までボーナスを当て続けます。<br><b>【やめどき】</b>ボーナス後32G(or 35G)ヤメ。"
+            })
+        elif through_count == 4 or through_count == 2:
+            table_target = through_count + 1
+            plans.append({
+                "title": f"🎯 テーブル天井狙い ({through_count}スルー)",
+                "color": "#FF00FF",
+                "desc": f"規定回数{table_target}回目の振り分けが濃い大チャンス状態です。",
+                "target_g": ceiling_target,
+                "type": "CEILING",
+                "action": "次のボーナス当選まで打ち切ります。<br><b>【やめどき】</b>基本はボーナス後32G(or 35G)ヤメ。<br>⚠️終了画面「夕方」やドキハナチャンス失敗時は次回も期待値が高いため続行。"
             })
         elif current_g < 400:
+            # ★修正: プランB(天井ツッパ)を削除し、400G絶対ヤメを強調
             plans.append({
-                "title": "🅰️ プランA：400Gゾーン狙い",
+                "title": "🅰️ 400G仮天井 ゾーン狙い",
                 "color": "#00ff00",
-                "desc": "300-400Gの当選率は約80%超。400Gを抜けたらヤメる低リスク戦略。",
+                "desc": "301〜400Gの当選率は80%超え！当たればラッキーの低リスク戦略です。",
                 "target_g": zone_target,
                 "cost": calc_investment(current_g, zone_target),
                 "type": "ZONE",
-                "action": "400Gまでに当たらなければ<b>即ヤメ</b>。<br>当たった場合は天国移行に期待し、ボーナス後32Gヤメ（夕方背景やドキハナ発生時は続行の判断を）。"
-            })
-            plans.append({
-                "title": "🅱️ プランB：もし抜けた場合 (天井ツッパ)",
-                "color": "#ff4444",
-                "desc": "400Gを抜けると期待値は下がります。リスク覚悟で追う場合の追加投資額です。",
-                "target_g": ceiling_target,
-                "cost": calc_investment(current_g, ceiling_target),
-                "extra_info": f"※ゾーン抜け後、さらに約 {calc_investment(zone_target, ceiling_target):,} 円 必要",
-                "type": "CEILING",
-                "action": "天井(800G)まで追加投資しボーナス当選。天国移行に期待。<br><b>【やめどき】</b>ボーナス後32Gヤメ（夕方背景やドキハナ発生時は続行）。"
+                "action": "<b>【絶対ルール】400Gまでに当たらなければ「即ヤメ」してください。</b><br>DUOは400G以降を追うと期待値がマイナスになります。<br>当たった場合は天国移行に期待し、ボーナス後32G(or 35G)ヤメ。"
             })
         else:
             plans.append({
-                "title": "⚠️ 危険領域 (ゾーン抜け)",
+                "title": "⚠️ 危険領域 (400G抜け)",
                 "color": "#ff4444",
-                "desc": "現在は400Gを抜けており、スルー回数が少なければ期待値マイナスです。",
+                "desc": f"現在{current_g}G・{through_count}スルー。仮天井を抜け、スルー恩恵も弱い状態です。",
                 "target_g": ceiling_target,
-                "type": "STOP"
+                "type": "STOP",
+                "action": "ここから800G天井まで追うのはリスクが高すぎます。別の台を探しましょう。"
             })
 
     # ----------------------------------------------------
@@ -209,7 +211,6 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
         ceiling_target = 999
         
         if total_yuuri >= 2000:
-            # ★【修正箇所】すでに条件クリアしている場合は「最短〜最深」で表示
             cost_ceiling = calc_investment(current_g, ceiling_target)
             cost_str = f"""
             <div style="font-size: 0.5em; line-height: 1.2; color: #ccc; margin-top: 5px; font-weight: normal;">最短(即当たり) 〜 最深(天井)</div>
@@ -231,7 +232,6 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
             if target_cross_g < ceiling_target:
                 cost_cross = calc_investment(current_g, target_cross_g)
                 cost_ceiling = calc_investment(current_g, ceiling_target)
-                
                 cost_str = f"""
                 <div style="font-size: 0.5em; line-height: 1.2; color: #ccc; margin-top: 5px; font-weight: normal;">最短 ({target_cross_g}G到達)</div>
                 <div style="line-height: 1.2; color: #FFD700;">¥ {cost_cross:,}</div>
@@ -280,7 +280,6 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
         ceiling_target = 999
         
         if total_yuuri >= 1900:
-             # ★【修正箇所】すでに条件クリアしている場合
              cost_ceiling = calc_investment(current_g, ceiling_target)
              cost_str = f"""
              <div style="font-size: 0.5em; line-height: 1.2; color: #ccc; margin-top: 5px; font-weight: normal;">最短(即当たり) 〜 最深(天井)</div>
@@ -344,7 +343,6 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
         ceiling_target = 999
         
         if total_yuuri >= 2300:
-            # ★【修正箇所】すでに条件クリアしている場合
             cost_ceiling = calc_investment(current_g, ceiling_target)
             cost_str = f"""
             <div style="font-size: 0.5em; line-height: 1.2; color: #ccc; margin-top: 5px; font-weight: normal;">最短(即当たり) 〜 最深(天井)</div>
@@ -384,7 +382,6 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
     # 結果カードの描画
     # ==========================================
     for plan in plans:
-        # 特別な金額フォーマットが設定されている場合はそれを使う
         if plan.get("type") != "STOP":
             if "cost_str" in plan:
                 cost_txt = plan["cost_str"]
