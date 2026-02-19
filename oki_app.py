@@ -151,7 +151,7 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
             plans.append({
                 "title": "👑 スルー天井狙い (問答無用)",
                 "color": "#FFD700",
-                "desc": "2スルー以上はテーブル期待値が高いです。当たるまで打ち切り推奨。",
+                "desc": "2スルー以上は期待値が高いです。当たるまで打ち切り推奨。",
                 "target_g": ceiling_target,
                 "type": "CEILING",
                 "action": "ボーナス当選まで打ち切ります。<br><b>【やめどき】</b>基本はボーナス後32G(or 35G)ヤメ。<br>⚠️終了画面「夕方」は次回天国濃厚、ドキハナチャンス失敗時は次回ドキハナ確率50%のため<b>絶対続行</b>です。"
@@ -326,7 +326,7 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
             plans.append({"title": "✋ STOP", "color": "#777", "desc": "有利区間2300G、または通常600Gから。", "type": "STOP"})
 
     # ==========================================
-    # 結果カードの描画
+    # 結果カードの描画 (修正済み)
     # ==========================================
     for plan in plans:
         cost_txt = "---"
@@ -334,15 +334,10 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
             investment = plan.get("cost", calc_investment(current_g, plan["target_g"]))
             cost_txt = f"¥ {investment:,}"
 
-        # 展開・やめどきのHTMLブロック
+        # HTMLタグのインデントを削除して1行にする（バグ対策）
         action_html = ""
         if 'action' in plan:
-            action_html = f"""
-            <div style="background-color: rgba(255, 255, 255, 0.05); padding: 12px; border-radius: 8px; margin-top: 15px; border-left: 4px solid {plan['color']};">
-                <div style="font-size: 0.9em; font-weight: bold; color: {plan['color']}; margin-bottom: 5px;">▶ 予想される展開・やめどき</div>
-                <div style="font-size: 0.9em; line-height: 1.5; color: #eee;">{plan['action']}</div>
-            </div>
-            """
+            action_html = f"""<div style="background-color: rgba(255, 255, 255, 0.05); padding: 12px; border-radius: 8px; margin-top: 15px; border-left: 4px solid {plan['color']};"><div style="font-size: 0.9em; font-weight: bold; color: {plan['color']}; margin-bottom: 5px;">▶ 予想される展開・やめどき</div><div style="font-size: 0.9em; line-height: 1.5; color: #eee;">{plan['action']}</div></div>"""
 
         # HTMLレンダリング
         st.markdown(f"""
