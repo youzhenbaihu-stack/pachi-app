@@ -90,7 +90,7 @@ st.markdown("---")
 
 col1, col2 = st.columns(2)
 with col1:
-    current_g = st.number_input("現在ゲーム数", min_value=0, value=100, step=10)
+    current_g = st.number_input("現在ゲーム数", min_value=0, value=0, step=10)
 with col2:
     is_reset = st.checkbox("朝イチ / リセット", value=False)
 
@@ -273,6 +273,17 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
                 else:
                     plans.append({"title": "✋ まだ早いです", "color": "#777", "desc": f"朝一1スルーの通常B狙いは {border}G から。", "type": "STOP"})
             
+            # ★追加：GOLDのリセット32Gカニ歩き
+            elif is_reset and current_g <= 32:
+                plans.append({
+                    "title": "🔄 リセット32Gカニ歩き",
+                    "color": "#00ff00",
+                    "desc": "朝一リセット台はチャンスモード滞在率約40%！32Gだけ回すのが有効。",
+                    "target_g": 32,
+                    "cost": calc_investment(current_g, 32),
+                    "type": "ZONE",
+                    "action": "<b>32Gまで回して当たらなければ即ヤメ（カニ歩き）</b>推奨です。<br>当たった場合は次回モードB以上に期待できるため、天国抜け後32Gヤメ。"
+                })
             elif is_reset and current_g <= 200:
                 plans.append({
                     "title": "🔄 リセット・チャンス狙い (200G)",
@@ -402,6 +413,18 @@ if st.button("🔥 戦略分析 (ANALYZE) 🔥"):
                 "cost_str": cost_str,
                 "type": "CEILING",
                 "action": "有利区間3000G付近の区間切れでの恩恵（ドキドキモード等）に期待。<br><b>【やめどき】</b>天国連チャン終了後、32G回して即ヤメ。"
+            })
+        
+        # ★追加：ゴージャスのリセット32Gカニ歩き
+        elif is_reset and current_g <= 32:
+             plans.append({
+                "title": "🔄 リセット32Gカニ歩き",
+                "color": "#00ff00",
+                "desc": "朝一リセットはチャンスモード狙いが有効。32Gまで。",
+                "target_g": 32,
+                "cost": calc_investment(current_g, 32),
+                "type": "ZONE",
+                "action": "<b>32Gまで回して当たらなければ即ヤメ（カニ歩き）</b>推奨です。<br>当たった場合は次回モードB以上に期待できるため、天国抜け後32Gヤメ。"
             })
         elif is_reset and current_g <= 200:
              plans.append({
