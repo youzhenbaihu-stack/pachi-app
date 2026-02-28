@@ -350,7 +350,7 @@ with col2:
     with c_data2:
         first_hits = st.number_input("初当たり回数", min_value=0, value=0)
 
-    # 3. 出玉詳細設定 (LT対応 ＆ RUSH振り分け対応)
+    # 3. 出玉詳細設定 (LT・上位RUSH対応)
     st.markdown("#### ▼ 出玉詳細設定")
     
     has_lt = st.checkbox("⚡ 上位RUSH / ラッキートリガー (LT) を考慮する")
@@ -358,41 +358,65 @@ with col2:
     lt_payout = 0
     
     if has_lt:
-        c_lt1, c_lt2 = st.columns(2)
-        with c_lt1:
-            lt_hits = st.number_input("上位RUSH(LT)中の当たり回数", min_value=0, value=0)
-        with c_lt2:
-            lt_payout = st.number_input("上位RUSH(LT)の平均出玉", value=1500, step=10)
+        # 🌟 NEW: 誤解を防ぐための重要なお知らせ
+        st.caption("💡 【注意】上位RUSHで「継続率が上がるだけ」で「出玉の振り分け」が変わらない機種の場合、この設定は不要です。（下の通常RUSHの項目にまとめて計算してOKです）")
+        
+        st.markdown("##### ⚡ 上位RUSH(LT) の設定")
+        lt_hits = st.number_input("上位RUSH(LT)中の当たり回数", min_value=0, value=0)
+        
+        # 🌟 NEW: 上位RUSHの振り分け設定
+        lt_payout_mode = st.radio(
+            "上位RUSH(LT)中の出玉タイプ", 
+            ["① 単一出玉 (オール1500発など)", "② 複数振り分け (甘デジ・ライトミドルなど)"],
+            key="lt_payout_mode"
+        )
+
+        if lt_payout_mode == "① 単一出玉 (オール1500発など)":
+            lt_payout = st.number_input("上位RUSH(LT)中の平均出玉", value=1500, step=10, key="lt_single_payout")
+        else:
+            c_lt_ratio1, c_lt_ratio2 = st.columns(2)
+            with c_lt_ratio1:
+                lt_payout1 = st.number_input("出玉A (例: 1500)", value=1500, step=10, key="lt_payout1")
+                lt_ratio1 = st.number_input("割合A (%)", min_value=0.0, max_value=100.0, value=50.0, step=1.0, key="lt_ratio1")
+            with c_lt_ratio2:
+                lt_payout2 = st.number_input("出玉B (例: 300)", value=300, step=10, key="lt_payout2")
+                lt_ratio2 = st.number_input("割合B (%)", min_value=0.0, max_value=100.0, value=50.0, step=1.0, key="lt_ratio2")
+                
+            lt_payout = (lt_payout1 * (lt_ratio1 / 100)) + (lt_payout2 * (lt_ratio2 / 100))
+            st.success(f"📈 算出された上位RUSH(LT)中の平均出玉: **{lt_payout:.1f} 発**")
+            
+        st.markdown("---")
     
     # RUSH中の当たり回数を自動計算（総当たり - 初当たり - LT当たり）
     st_hits = total_hits - first_hits - lt_hits
     if st_hits < 0: st_hits = 0
-    st.info(f"📊 計算上の通常RUSH中当たり回数: **{st_hits} 回**")
+    st.info(f"📊 計算上の(通常)RUSH中当たり回数: **{st_hits} 回**")
 
     st.caption("💡 【重要】サイトセブンでは「3000発」は「1500発×2回」とカウントされるため、エヴァやRe:ゼロ等の機種は平均出玉を「1500」のままにしてください。")
 
     payout_mode = st.radio(
         "通常RUSH中の出玉タイプ", 
-        ["① 単一出玉 (オール1500発など)", "② 複数振り分け (甘デジ・ライトミドルなど)"]
+        ["① 単一出玉 (オール1500発など)", "② 複数振り分け (甘デジ・ライトミドルなど)"],
+        key="normal_payout_mode"
     )
 
     if payout_mode == "① 単一出玉 (オール1500発など)":
-        st_payout = st.number_input("RUSH中の平均出玉", value=1500, step=10)
+        st_payout = st.number_input("通常RUSH中の平均出玉", value=1500, step=10, key="normal_single_payout")
     else:
         c_ratio1, c_ratio2 = st.columns(2)
         with c_ratio1:
-            payout1 = st.number_input("出玉A (例: 880)", value=880, step=10)
-            ratio1 = st.number_input("割合A (%)", min_value=0.0, max_value=100.0, value=40.0, step=1.0)
+            payout1 = st.number_input("出玉A (例: 880)", value=880, step=10, key="normal_payout1")
+            ratio1 = st.number_input("割合A (%)", min_value=0.0, max_value=100.0, value=40.0, step=1.0, key="normal_ratio1")
         with c_ratio2:
-            payout2 = st.number_input("出玉B (例: 330)", value=330, step=10)
-            ratio2 = st.number_input("割合B (%)", min_value=0.0, max_value=100.0, value=60.0, step=1.0)
+            payout2 = st.number_input("出玉B (例: 330)", value=330, step=10, key="normal_payout2")
+            ratio2 = st.number_input("割合B (%)", min_value=0.0, max_value=100.0, value=60.0, step=1.0, key="normal_ratio2")
             
         st_payout = (payout1 * (ratio1 / 100)) + (payout2 * (ratio2 / 100))
-        st.success(f"📈 算出されたRUSH中の平均出玉: **{st_payout:.1f} 発**")
+        st.success(f"📈 算出された通常RUSH中の平均出玉: **{st_payout:.1f} 発**")
 
     st.markdown("---")
     
-    # 🌟 NEW: 初当たり出玉のシンプル入力（RUSH突入・非突入を一括計算）
+    # 初当たり出玉のシンプル入力（RUSH突入・非突入を一括計算）
     st.markdown("#### ▼ 初当たり出玉設定")
     first_hit_payout = st.number_input("初当たり1回あたりの出玉 (突入/非突入問わず)", value=330, step=10)
     st.caption(f"※ 初当たり {first_hits} 回 × {first_hit_payout} 発 で自動計算されます。")
@@ -403,9 +427,8 @@ with col2:
     if st.button("🔥 解析開始 (ANALYZE) 🔥", type="primary"):
         real_spins = total_spins - st_spins_final - jitan_spins
         
-        # 🌟 計算ロジックが超シンプルに！
-        income_st = st_hits * st_payout               # RUSH中の獲得出玉
-        income_lt = lt_hits * lt_payout               # LT中の獲得出玉
+        income_st = st_hits * st_payout               # 通常RUSH中の獲得出玉
+        income_lt = lt_hits * lt_payout               # 上位RUSH(LT)中の獲得出玉
         income_first = first_hits * first_hit_payout  # 初当たりの獲得出玉（一括）
         
         total_payout = income_st + income_first + income_lt
