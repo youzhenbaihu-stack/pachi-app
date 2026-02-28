@@ -342,37 +342,51 @@ with col2:
         st.warning("⚠️ 時短モードON")
         jitan_spins = st.number_input("時短中に回した回転数", min_value=0, value=0, step=1)
 
-    # 2. 当たりデータ入力（新ロジック）
+   # 2. 当たりデータ入力
     st.markdown("#### ▼ 当たりデータ (データ機通りに入力)")
+    
     c_data1, c_data2 = st.columns(2)
     with c_data1:
-        total_hits = st.number_input("大当たり回数", min_value=0, value=0)
+        total_hits = st.number_input("総大当たり回数", min_value=0, value=0)
     with c_data2:
         first_hits = st.number_input("初当たり回数", min_value=0, value=0)
-
-    # 3. 出玉詳細設定 (LT対応版)
-    st.markdown("#### ▼ 出玉詳細設定")
-    
-    # 🌟 新機能：LT / 上位RUSH の設定トグル
-    has_lt = st.checkbox("⚡ 上位RUSH / ラッキートリガー (LT) を考慮する")
-    
-    lt_hits = 0
-    lt_payout = 0
-    
-    if has_lt:
-        st.info("上位RUSH・LT中のデータを入力してください")
-        c_lt1, c_lt2 = st.columns(2)
-        with c_lt1:
-            lt_hits = st.number_input("上位RUSH(LT)中の当たり回数", min_value=0, value=0)
-        with c_lt2:
-            lt_payout = st.number_input("上位RUSH(LT)の平均出玉", value=1500, step=10)
-    
-    # 通常STの当たり回数を逆算 (総当たり - 初当たり - LT当たり)
-    st_hits = total_hits - first_hits - lt_hits
+        
+    # RUSH中の当たり回数を自動計算（総当たり - 初当たり）
+    st_hits = total_hits - first_hits
     if st_hits < 0: st_hits = 0
-    st.caption(f"📊 自動計算: 通常RUSH中の当たり回数は **{st_hits} 回** として計算します。")
+    st.info(f"📊 計算上のRUSH中当たり回数: **{st_hits} 回**")
 
-    st_payout = st.number_input("通常RUSH中の平均出玉", value=1500, step=10)
+    # 3. 出玉詳細設定（振り分け対応版）
+    st.markdown("#### ▼ 出玉詳細設定")
+    st.caption("💡 【重要】サイトセブンでは「3000発」は「1500発×2回」とカウントされるため、エヴァやRe:ゼロ等の機種は平均出玉を「1500」のままにしてください。")
+
+    payout_mode = st.radio(
+        "RUSH中の出玉タイプを選択してください", 
+        ["① 単一出玉 (オール1500発など)", "② 複数振り分け (甘デジ・ライトミドルなど)"]
+    )
+
+    if payout_mode == "① 単一出玉 (オール1500発など)":
+        st_payout = st.number_input("RUSH中の平均出玉", value=1500, step=10)
+    else:
+        st.markdown("##### ⚖️ 振り分け比率設定")
+        st.caption("スペック上の出玉と割合（％）を入力して、平均出玉を算出します。")
+        
+        c_ratio1, c_ratio2 = st.columns(2)
+        with c_ratio1:
+            payout1 = st.number_input("出玉パターンA (例: 880)", value=880, step=10)
+            ratio1 = st.number_input("パターンAの割合 (%)", min_value=0.0, max_value=100.0, value=40.0, step=1.0)
+        with c_ratio2:
+            payout2 = st.number_input("出玉パターンB (例: 330)", value=330, step=10)
+            ratio2 = st.number_input("パターンBの割合 (%)", min_value=0.0, max_value=100.0, value=60.0, step=1.0)
+            
+        # 振り分けからRUSH中の平均出玉を計算
+        st_payout = (payout1 * (ratio1 / 100)) + (payout2 * (ratio2 / 100))
+        st.success(f"📈 算出されたRUSH中の平均出玉: **{st_payout:.1f} 発**")
+        
+        if ratio1 + ratio2 != 100.0:
+            st.warning("⚠️ 割合の合計が100%になっていません！")
+
+    st.markdown("---")
 
     c_fail1, c_fail2 = st.columns(2)
     with c_fail1:
@@ -425,3 +439,4 @@ with col2:
                 st.markdown("<h2 style='color: orange; text-align: center;'>⚠️ ボーダー付近 (Average) ⚠️</h2>", unsafe_allow_html=True)
         else:
             st.error("計算エラー：投資がマイナスです。(グラフの読み取り誤差、または出玉設定が多すぎる可能性があります)")
+
