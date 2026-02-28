@@ -253,21 +253,31 @@ def analyze_graph_final(img):
     return int(est_diff_balls), cropped_img
 
 def sum_red_start_counts(img):
-    """OCR集計"""
+    """OCR集計（1と7の誤認識対策版）"""
     height, width = img.shape[:2]
     roi_width = int(width * 0.35) 
     roi = img[:, width - roi_width : width]
+    
+    # 🌟 改善ポイント1: 画像を2.5倍に拡大してOCRの認識精度を上げる
+    roi = cv2.resize(roi, None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
+    
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     lower_red1 = np.array([0, 100, 100])
     upper_red1 = np.array([10, 255, 255])
     lower_red2 = np.array([160, 100, 100])
     upper_red2 = np.array([180, 255, 255])
     mask = cv2.inRange(hsv, lower_red1, upper_red1) + cv2.inRange(hsv, lower_red2, upper_red2)
-    kernel = np.ones((2,2), np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_DILATE, kernel)
+    
+    # 🌟 改善ポイント2: 膨張処理(DILATE)をやめ、メディアンフィルタでノイズ除去する
+    # 1と7がくっついて誤認識されるのを防ぐため
+    mask = cv2.medianBlur(mask, 3)
+    
     mask_inverted = cv2.bitwise_not(mask)
-    config = r'--oem 3 --psm 6 outputbase digits'
+    
+    # 🌟 改善ポイント3: 出力を完全に数字(0-9)のみに限定する設定を追加
+    config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789'
     text = pytesseract.image_to_string(mask_inverted, config=config)
+    
     numbers = re.findall(r'\d+', text)
     numbers = [int(n) for n in numbers]
     return sum(numbers), numbers
@@ -325,7 +335,7 @@ with col2:
     
     # 1. 基本データ入力
     total_spins = st.number_input("現在の総回転数", min_value=0, value=3000, step=1)
-    st_spins_final = st.number_input("ラッシュ(ST)の回転数", min_value=0, value=st_spins_auto, step=1)
+    st_spins_final = st.number_input("ラッシュ(ST)の回転数合計", min_value=0, value=st_spins_auto, step=1)
     
     jitan_spins = 0
     if mode == "② 時短あり (エヴァ・海など)":
@@ -334,43 +344,58 @@ with col2:
 
     # 2. 当たりデータ入力（新ロジック）
     st.markdown("#### ▼ 当たりデータ (データ機通りに入力)")
-    
     c_data1, c_data2 = st.columns(2)
     with c_data1:
-        # ★ここを修正しました
         total_hits = st.number_input("大当たり回数", min_value=0, value=0)
     with c_data2:
         first_hits = st.number_input("初当たり回数", min_value=0, value=0)
-        
-    st_hits = total_hits - first_hits
-    if st_hits < 0: st_hits = 0
-    st.info(f"📊 計算上のST中当たり回数: **{st_hits} 回**")
 
+    # 3. 出玉詳細設定 (LT対応版)
     st.markdown("#### ▼ 出玉詳細設定")
     
-    # ★ここに注釈を追加しました
-    st_payout = st.number_input("ST中の平均出玉 (基本1500)", value=1500, step=10)
-    st.caption("※サイトセブン上では3000発は1500発を2回と記載するため、ST中の平均出玉は1500発で大丈夫です。")
+    # 🌟 新機能：LT / 上位RUSH の設定トグル
+    has_lt = st.checkbox("⚡ 上位RUSH / ラッキートリガー (LT) を考慮する")
+    
+    lt_hits = 0
+    lt_payout = 0
+    
+    if has_lt:
+        st.info("上位RUSH・LT中のデータを入力してください")
+        c_lt1, c_lt2 = st.columns(2)
+        with c_lt1:
+            lt_hits = st.number_input("上位RUSH(LT)中の当たり回数", min_value=0, value=0)
+        with c_lt2:
+            lt_payout = st.number_input("上位RUSH(LT)の平均出玉", value=1500, step=10)
+    
+    # 通常STの当たり回数を逆算 (総当たり - 初当たり - LT当たり)
+    st_hits = total_hits - first_hits - lt_hits
+    if st_hits < 0: st_hits = 0
+    st.caption(f"📊 自動計算: 通常RUSH中の当たり回数は **{st_hits} 回** として計算します。")
+
+    st_payout = st.number_input("通常RUSH中の平均出玉", value=1500, step=10)
 
     c_fail1, c_fail2 = st.columns(2)
     with c_fail1:
-        fail_payout = st.selectbox("通常(ST落ち)の出玉", [1500, 1200, 1050, 450, 300], index=4)
+        fail_payout = st.selectbox("通常(RUSH非突入)の出玉", [1500, 1200, 1050, 450, 300, 0], index=4)
     with c_fail2:
-        fail_count = st.number_input("通常(ST落ち)の回数", min_value=0, max_value=first_hits, value=0)
+        fail_count = st.number_input("通常(RUSH非突入)の回数", min_value=0, max_value=first_hits, value=0)
     
     rush_entry_count = first_hits - fail_count
-    rush_entry_payout = st.number_input("RUSH突入時の出玉 (基本1500)", value=1500, step=10)
+    rush_entry_payout = st.number_input("RUSH突入時の初当たり出玉", value=1500, step=10)
 
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # 4. 解析実行
     if st.button("🔥 解析開始 (ANALYZE) 🔥", type="primary"):
         real_spins = total_spins - st_spins_final - jitan_spins
         
+        # 🌟 出玉計算にLT分(income_lt)を追加
         income_st = st_hits * st_payout
+        income_lt = lt_hits * lt_payout
         income_fail = fail_count * fail_payout
         income_entry = rush_entry_count * rush_entry_payout
         
-        total_payout = income_st + income_fail + income_entry
+        total_payout = income_st + income_fail + income_entry + income_lt
         used_balls = total_payout - diff_balls
         
         st.markdown(f"""
@@ -378,6 +403,7 @@ with col2:
             <h3 style="color: #FFD700; margin-bottom: 0;">RESULT</h3>
             <p style="color: #ccc;">実質通常回転数: {real_spins} 回転</p>
             <p style="color: #ccc;">推定投資: {int(used_balls):,}発 ({int(used_balls)*4:,}円)</p>
+            <p style="color: #888; font-size: 0.8em;">※理論上の総獲得出玉: {int(total_payout):,}発</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -398,4 +424,4 @@ with col2:
             else:
                 st.markdown("<h2 style='color: orange; text-align: center;'>⚠️ ボーダー付近 (Average) ⚠️</h2>", unsafe_allow_html=True)
         else:
-            st.error("計算エラー：投資がマイナスです。")
+            st.error("計算エラー：投資がマイナスです。(グラフの読み取り誤差、または出玉設定が多すぎる可能性があります)")
