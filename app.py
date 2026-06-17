@@ -288,26 +288,43 @@ def sum_red_start_counts(img):
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("### 📸 画像解析エリア")
+    st.markdown("### 📸 画像解析＆差玉入力エリア")
     st.markdown("---")
     
-    uploaded_graph = st.file_uploader("① グラフ画像をアップロード", type=['jpg', 'png', 'jpeg'], key="graph")
+    st.markdown("#### ▼ 推定差玉の取得")
+    # 🌟 NEW: 差玉の入力モード切り替え
+    graph_mode = st.radio(
+        "差玉の入力方法を選択", 
+        ["📷 画像から自動解析", "✍️ 手入力 (3万発オーバーなど)"]
+    )
+    
     diff_balls = 0
 
-    if uploaded_graph is not None:
-        file_bytes = np.asarray(bytearray(uploaded_graph.read()), dtype=np.uint8)
-        img_graph = cv2.imdecode(file_bytes, 1)
-        result, msg_or_img = analyze_graph_final(img_graph)
+    if graph_mode == "📷 画像から自動解析":
+        uploaded_graph = st.file_uploader("① グラフ画像をアップロード", type=['jpg', 'png', 'jpeg'], key="graph")
         
-        if result is not None:
-            diff_balls = result
-            st.image(cv2.cvtColor(msg_or_img, cv2.COLOR_BGR2RGB), caption=f"解析範囲", use_column_width=True)
-            st.success(f"推定差玉: {diff_balls} 発")
-        else:
-            st.error(f"エラー: {msg_or_img}")
+        if uploaded_graph is not None:
+            file_bytes = np.asarray(bytearray(uploaded_graph.read()), dtype=np.uint8)
+            img_graph = cv2.imdecode(file_bytes, 1)
+            result, msg_or_img = analyze_graph_final(img_graph)
+            
+            if result is not None:
+                st.image(cv2.cvtColor(msg_or_img, cv2.COLOR_BGR2RGB), caption=f"解析範囲", use_column_width=True)
+                st.success(f"🔍 自動解析結果: {result} 発")
+                
+                # 🌟 NEW: 解析結果を手動で微調整できるように変更
+                st.caption("※少しズレている場合は、下のボックスで微調整してください")
+                diff_balls = st.number_input("推定差玉 (自動入力済み)", value=int(result), step=100)
+            else:
+                st.error(f"エラー: {msg_or_img}")
+    else:
+        # 🌟 NEW: 手入力モード
+        st.info("💡 グラフの縮尺が変わっている場合や、正確な差玉が分かっている場合はこちらに入力してください。")
+        diff_balls = st.number_input("推定差玉を入力 (マイナスの場合は - をつけてください)", value=0, step=100)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    st.markdown("#### ▼ ST回転数の自動取得")
     uploaded_histories = st.file_uploader(
         "② 履歴画像（赤数字）をアップロード (複数枚可)", 
         type=['jpg', 'png', 'jpeg'], 
